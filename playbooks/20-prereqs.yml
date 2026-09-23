@@ -1,0 +1,14 @@
+---
+# Cluster prerequisites that GitOps cannot handle. For now: GPU MachineSets (when gpu_enabled).
+# Scale every GPU MachineSet to 0:  -e gpu_enabled=true -e gpu_node_prep_replicas=0
+- name: Cluster prerequisites
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Create the GPU MachineSets
+      ansible.builtin.include_role:
+        name: gpu_node_prep
+        apply:
+          tags: [gpu_node_prep]
+      when: gpu_enabled | bool
+      tags: always

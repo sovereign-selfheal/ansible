@@ -1,0 +1,9 @@
+---
+# Kuadrant control plane (Authorino + Limitador) managed by the RHCL operator.
+# Ported from rhocpai-mvp-routing manifests/50-connectivity-link/10-kuadrant.yaml.
+# Policies (AuthPolicy, TokenRateLimitPolicy, ...) are deployed by the gitops repo.
+apiVersion: kuadrant.io/v1beta1
+kind: Kuadrant
+metadata:
+  name: kuadrant
+  namespace: {{ namespace }}

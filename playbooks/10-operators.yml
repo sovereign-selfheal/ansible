@@ -1,0 +1,23 @@
+---
+# Install the operators declared in group_vars/all/main.yml (`operators`), in list order.
+# Tags: olm_operator (all), or one operator key, e.g. --tags rhoai.
+- name: Operators
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Install operator
+      ansible.builtin.include_role:
+        name: olm_operator
+        apply:
+          tags: [olm_operator, "{{ olm_operator_spec.key }}"]
+      loop: "{{ operators }}"
+      loop_control:
+        loop_var: olm_operator_spec
+        label: "{{ olm_operator_spec.key }}"
+      when: olm_operator_spec.enabled | bool
+      tags: always
+
+    - name: Operator summary
+      ansible.builtin.debug:
+        msg: "{{ olm_operator_report | default([]) }}"
+      tags: always

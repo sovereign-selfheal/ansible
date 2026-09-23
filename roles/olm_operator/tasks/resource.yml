@@ -1,0 +1,68 @@
+---
+# Apply one pre_install/post_install item (olm_operator_post) and wait for its readiness.
+# Item fields: template (optional: an item can be a pure wait), vars, state (present|patched),
+# wait_exists, wait, enabled. olm_operator_resource_gate is false for post_install items
+# while the operator is not installed (check mode only): their CRDs do not exist yet.
+
+- name: "Skip in check mode when the operator is not installed: {{ olm_operator_post.template | default('wait') }}"
+  ansible.builtin.debug:
+    msg: "{{ olm_operator_key }}: {{ olm_operator_post.template | default('wait') }} skipped, operator not installed in check mode"
+  when: not (olm_operator_resource_gate | bool)
+
+- name: "Apply {{ olm_operator_post.template | default('wait') }}"
+  when: olm_operator_resource_gate | bool
+  block:
+    - name: Wait for the resource to exist
+      kubernetes.core.k8s_info:
+        api_version: "{{ olm_operator_post.wait_exists.api_version }}"
+        kind: "{{ olm_operator_post.wait_exists.kind }}"
+        name: "{{ olm_operator_post.wait_exists.name }}"
+        namespace: "{{ olm_operator_post.wait_exists.namespace | default(omit) }}"
+        wait: true
+        wait_timeout: "{{ olm_operator_post.wait_exists.timeout | default(olm_operator_post_install_timeout) }}"
+      when:
+        - olm_operator_post.wait_exists is defined
+        - not ansible_check_mode
+
+    - name: "Apply {{ olm_operator_post.template | default('') }}"
+      when: olm_operator_post.template is defined
+      kubernetes.core.k8s:
+        state: "{{ olm_operator_post.state | default('present') }}"
+        definition: >-
+          {{ lookup('ansible.builtin.template', olm_operator_post.template | regex_replace('^templates/', ''),
+                    template_vars=olm_operator_post.vars | default({}))
+             | ansible.builtin.from_yaml_all | list }}
+
+    - name: Wait for the condition
+      kubernetes.core.k8s_info:
+        api_version: "{{ olm_operator_post.wait.api_version }}"
+        kind: "{{ olm_operator_post.wait.kind }}"
+        name: "{{ olm_operator_post.wait.name }}"
+        namespace: "{{ olm_operator_post.wait.namespace | default(omit) }}"
+        wait: true
+        wait_condition: "{{ olm_operator_post.wait.condition }}"
+        wait_sleep: "{{ olm_operator_poll_delay }}"
+        wait_timeout: "{{ olm_operator_post.wait.timeout | default(olm_operator_post_install_timeout) }}"
+      when:
+        - olm_operator_post.wait.condition is defined
+        - not ansible_check_mode
+
+    - name: Wait for the status field
+      kubernetes.core.k8s_info:
+        api_version: "{{ olm_operator_post.wait.api_version }}"
+        kind: "{{ olm_operator_post.wait.kind }}"
+        name: "{{ olm_operator_post.wait.name }}"
+        namespace: "{{ olm_operator_post.wait.namespace | default(omit) }}"
+      register: olm_operator_post_status
+      until:
+        - olm_operator_post_status.resources | length == 1
+        - >-
+          ((olm_operator_post_status.resources | first).status | default({}))[olm_operator_post.wait.status_field]
+          | default('') == olm_operator_post.wait.value
+      retries: >-
+        {{ ((olm_operator_post.wait.timeout | default(olm_operator_post_install_timeout) | int)
+            / olm_operator_poll_delay | int) | round(0, 'ceil') | int }}
+      delay: "{{ olm_operator_poll_delay }}"
+      when:
+        - olm_operator_post.wait.status_field is defined
+        - not ansible_check_mode

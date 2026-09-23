@@ -1,0 +1,104 @@
+---
+- name: Preflight checks
+  ansible.builtin.debug:
+    msg: >-
+      Checking cluster reachability, OpenShift {{ ocp_preflight_required_version }}.x,
+      default StorageClass={{ ocp_preflight_require_default_storageclass }},
+      catalogs={{ ocp_preflight_catalog_sources }}, gpu_enabled={{ ocp_preflight_gpu_enabled }}
+
+- name: Read the ClusterVersion (cluster reachable and authenticated)
+  kubernetes.core.k8s_info:
+    api_version: config.openshift.io/v1
+    kind: ClusterVersion
+    name: version
+  register: ocp_preflight_cv
+
+- name: Assert the OpenShift version
+  vars:
+    ocp_preflight_version: "{{ (ocp_preflight_cv.resources | first).status.desired.version }}"
+  ansible.builtin.assert:
+    that:
+      - ocp_preflight_cv.resources | length == 1
+      - (ocp_preflight_version.split('.')[:2] | join('.')) == ocp_preflight_required_version
+    fail_msg: >-
+      Cluster runs OpenShift {{ ocp_preflight_version }}; this bootstrap is validated only on
+      {{ ocp_preflight_required_version }}.x (operator pins are resolved per OCP minor).
+    success_msg: "OpenShift {{ ocp_preflight_version }}"
+
+- name: Read StorageClasses
+  kubernetes.core.k8s_info:
+    api_version: storage.k8s.io/v1
+    kind: StorageClass
+  register: ocp_preflight_sc
+  when: ocp_preflight_require_default_storageclass | bool
+
+- name: Assert a default StorageClass exists
+  vars:
+    ocp_preflight_default_sc: >-
+      {%- set acc = namespace(names=[]) -%}
+      {%- for sc in ocp_preflight_sc.resources -%}
+      {%- if (sc.metadata.annotations | default({}))['storageclass.kubernetes.io/is-default-class'] | default('') == 'true' -%}
+      {%- set acc.names = acc.names + [sc.metadata.name] -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ acc.names }}
+  ansible.builtin.assert:
+    that:
+      - ocp_preflight_default_sc | length > 0
+    fail_msg: No default StorageClass found; RHOAI workbenches and model storage need one.
+    success_msg: "Default StorageClass: {{ ocp_preflight_default_sc | join(', ') }}"
+  when: ocp_preflight_require_default_storageclass | bool
+
+- name: Read CatalogSources
+  kubernetes.core.k8s_info:
+    api_version: operators.coreos.com/v1alpha1
+    kind: CatalogSource
+    namespace: "{{ ocp_preflight_catalog_namespace }}"
+  register: ocp_preflight_catalogs
+
+- name: Assert the required CatalogSources are READY
+  vars:
+    ocp_preflight_ready: >-
+      {{ ocp_preflight_catalogs.resources
+         | selectattr('status.connectionState.lastObservedState', 'defined')
+         | selectattr('status.connectionState.lastObservedState', 'equalto', 'READY')
+         | map(attribute='metadata.name') | list }}
+  ansible.builtin.assert:
+    that:
+      - ocp_preflight_catalog_sources | difference(ocp_preflight_ready) | length == 0
+    fail_msg: >-
+      CatalogSources not READY: {{ ocp_preflight_catalog_sources | difference(ocp_preflight_ready) }}
+      (ready: {{ ocp_preflight_ready }})
+    success_msg: "CatalogSources READY: {{ ocp_preflight_catalog_sources }}"
+
+- name: GPU node check
+  when: ocp_preflight_gpu_enabled | bool
+  block:
+    - name: Read nodes
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Node
+      register: ocp_preflight_nodes
+
+    - name: Assert GPU nodes are present
+      vars:
+        ocp_preflight_label_key: "{{ ocp_preflight_gpu_node_label_selector.split('=')[0] }}"
+        ocp_preflight_label_value: "{{ ocp_preflight_gpu_node_label_selector.split('=')[1] | default('') }}"
+        ocp_preflight_gpu_nodes: >-
+          {%- set acc = namespace(names=[]) -%}
+          {%- for node in ocp_preflight_nodes.resources -%}
+          {%- set labels = node.metadata.labels | default({}) -%}
+          {%- if labels[ocp_preflight_label_key] | default(None) == ocp_preflight_label_value
+                or labels['node.kubernetes.io/instance-type'] | default('') is ansible.builtin.regex(ocp_preflight_gpu_instance_type_regex) -%}
+          {%- set acc.names = acc.names + [node.metadata.name] -%}
+          {%- endif -%}
+          {%- endfor -%}
+          {{ acc.names }}
+      ansible.builtin.assert:
+        that:
+          - ocp_preflight_gpu_nodes | length >= ocp_preflight_gpu_min_nodes | int
+        fail_msg: >-
+          gpu_enabled is true but fewer than {{ ocp_preflight_gpu_min_nodes }} GPU node(s) found
+          (label {{ ocp_preflight_gpu_node_label_selector }} or instance type matching
+          {{ ocp_preflight_gpu_instance_type_regex }}). Add a GPU MachineSet first.
+        success_msg: "GPU nodes: {{ ocp_preflight_gpu_nodes | join(', ') }}"

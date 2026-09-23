@@ -1,0 +1,276 @@
+---
+# =============================================================================
+# Non-secret defaults for the bootstrap. Everything here can be overridden with
+# -e (AgnosticV passes these as extra vars). Secrets go to vault.yml only.
+# =============================================================================
+
+# ----- Target platform --------------------------------------------------------
+# Operator pins below are validated only on this OpenShift minor; preflight fails otherwise.
+ocp_min_version: "4.22"
+
+# ----- GPU --------------------------------------------------------------------
+# Enables NFD + NVIDIA GPU operator (and their CRs) and the preflight GPU node check.
+gpu_enabled: false
+
+# ----- Post-install CR settings (rendered by roles/olm_operator/templates) ----
+gateway_class_name: openshift-default
+gateway_class_controller: openshift.io/gateway-controller/v1   # OCP 4.20+ controller name
+
+kuadrant_namespace: kuadrant-system
+authorino_tls_enabled: true
+authorino_replicas: 1
+
+rhoai_dsc_name: default-dsc
+# DataScienceCluster v2 component states (RHOAI 3.5). Only what the demo needs is Managed.
+# Model serving itself (InferenceService / ServingRuntime) is deployed by the gitops repo.
+rhoai_dsc_components:
+  dashboard: {managementState: Managed}
+  kserve:
+    managementState: Managed
+    nim: {managementState: "{{ 'Managed' if gpu_enabled | bool else 'Removed' }}"}
+    modelsAsService: {managementState: Removed}
+    wva: {managementState: Removed}
+  workbenches: {managementState: Managed, workbenchNamespace: rhods-notebooks}
+  aigateway: {managementState: Removed}
+  aipipelines: {managementState: Removed}
+  feastoperator: {managementState: Removed}
+  kueue: {managementState: Removed}
+  llamastackoperator: {managementState: Removed}
+  mcplifecycleoperator: {managementState: Removed}
+  mlflowoperator: {managementState: Removed}
+  modelregistry: {managementState: Removed, registriesNamespace: rhoai-model-registries}
+  ogx: {managementState: Removed}
+  ray: {managementState: Removed}
+  sparkoperator: {managementState: Removed}
+  trainer: {managementState: Removed}
+  trainingoperator: {managementState: Removed}
+  trustyai: {managementState: Removed}
+
+# GPU MachineSets (roles/gpu_node_prep, playbooks/20-prereqs.yml): one per worker zone,
+# only the first `gpu_node_prep_active_zone_count` zones get machines, to keep costs low.
+gpu_node_prep_instance_type: g6.xlarge
+gpu_node_prep_active_zone_count: 1
+gpu_node_prep_replicas: 1
+
+nfd_instance_name: nfd-instance
+gpu_cluster_policy_name: gpu-cluster-policy
+gpu_mig_strategy: single
+gpu_driver_enabled: true        # false when the driver is pre-installed on the nodes
+gpu_dcgm_exporter_enabled: true
+
+# ----- Operators ----------------------------------------------------------------
+# Installed in list order by playbooks/10-operators.yml (roles/olm_operator).
+# Pinning policy (AGENTS.md §3): numbered channel where the catalog offers one,
+# explicit starting_csv, installPlanApproval Manual. The role approves only an
+# InstallPlan containing starting_csv plus, at most, the CSVs in
+# expected_dependency_csvs. Pins resolved with scripts/resolve-operator-versions.sh.
+operators:
+  # 1. GitOps first: the last bootstrap step seeds an Argo CD Application.
+  #    RHDP pre-installs it (channel latest, Automatic): the role adopts that Subscription.
+  - key: openshift_gitops
+    name: openshift-gitops-operator
+    namespace: openshift-gitops-operator
+    channel: gitops-1.21
+    starting_csv: openshift-gitops-operator.v1.21.4   # resolved on OCP 4.22.14 on 2026-09-23
+    # RHDP pre-installs GitOps from `latest`: a newer version than the pin is kept (and frozen
+    # with Manual approval) instead of failing, because OLM cannot downgrade.
+    allow_newer_installed: true
+    source: redhat-operators
+    source_namespace: openshift-marketplace
+    install_plan_approval: Manual
+    create_operator_group: true
+    operator_group_all_namespaces: true
+    enabled: true
+
+  # 2. cert-manager: prerequisite of RHOAI 3.x KServe. Also pre-installed by RHDP (adopted).
+  - key: cert_manager
+    name: openshift-cert-manager-operator
+    namespace: cert-manager-operator
+    channel: stable-v1.20
+    starting_csv: cert-manager-operator.v1.20.0   # resolved on OCP 4.22.14 on 2026-09-23
+    allow_newer_installed: true                   # pre-installed by RHDP, see openshift_gitops
+    source: redhat-operators
+    source_namespace: openshift-marketplace
+    install_plan_approval: Manual
+    create_operator_group: true
+    operator_group_all_namespaces: false          # OwnNamespace, as in the old repo
+    enabled: true
+
+  # 3. Red Hat Connectivity Link, before RHOAI so odh-model-controller starts with Kuadrant present.
+  #    Installed in openshift-operators (existing global-operators OperatorGroup). Only a
+  #    `stable` channel exists; the pin + Manual approval freeze the version.
+  #    NOTE: Manual approval in openshift-operators also gates upgrades of every other
+  #    operator subscribed in that namespace (OLM resolves a namespace as a unit).
+  - key: rhcl
+    name: rhcl-operator
+    namespace: openshift-operators
+    manage_namespace: false
+    channel: stable
+    starting_csv: rhcl-operator.v1.4.3            # resolved on OCP 4.22.14 on 2026-09-23
+    # OLM dependencies resolved into the same InstallPlan (all from redhat-operators).
+    expected_dependency_csvs:
+      - authorino-operator.v1.4.3                 # resolved on OCP 4.22.14 on 2026-09-23
+      - limitador-operator.v1.4.2                 # resolved on OCP 4.22.14 on 2026-09-23
+      - dns-operator.v1.4.2                       # resolved on OCP 4.22.14 on 2026-09-23
+    source: redhat-operators
+    source_namespace: openshift-marketplace
+    install_plan_approval: Manual
+    create_operator_group: false
+    enabled: true
+    # Gateway API provider BEFORE the Subscription: the Kuadrant operator detects Istio only
+    # when it starts (otherwise Kuadrant stays MissingDependency until its pod is restarted).
+    pre_install:
+      - template: gatewayclass.yaml.j2
+        vars:
+          name: "{{ gateway_class_name }}"
+          controller_name: "{{ gateway_class_controller }}"
+        wait:
+          api_version: gateway.networking.k8s.io/v1
+          kind: GatewayClass
+          name: "{{ gateway_class_name }}"
+          condition: {type: Accepted, status: "True"}
+      # Istio CRDs installed by the Ingress Operator for the GatewayClass (checked by Kuadrant).
+      - wait_exists:
+          api_version: apiextensions.k8s.io/v1
+          kind: CustomResourceDefinition
+          name: wasmplugins.extensions.istio.io
+    post_install:
+      - template: namespace.yaml.j2
+        vars:
+          name: "{{ kuadrant_namespace }}"
+      - template: kuadrant.yaml.j2
+        vars:
+          namespace: "{{ kuadrant_namespace }}"
+        wait:
+          api_version: kuadrant.io/v1beta1
+          kind: Kuadrant
+          name: kuadrant
+          namespace: "{{ kuadrant_namespace }}"
+          condition: {type: Ready, status: "True"}
+          timeout: 600
+      # Authorino TLS (RHOAI 3.5 docs): annotate the Service so service-ca mints the cert.
+      - template: authorino-service-cert.yaml.j2
+        state: patched
+        enabled: "{{ authorino_tls_enabled }}"
+        vars:
+          namespace: "{{ kuadrant_namespace }}"
+        wait_exists:
+          api_version: v1
+          kind: Service
+          name: authorino-authorino-authorization
+          namespace: "{{ kuadrant_namespace }}"
+      - template: authorino.yaml.j2
+        enabled: "{{ authorino_tls_enabled }}"
+        vars:
+          namespace: "{{ kuadrant_namespace }}"
+          replicas: "{{ authorino_replicas }}"
+        wait:
+          api_version: operator.authorino.kuadrant.io/v1beta1
+          kind: Authorino
+          name: authorino
+          namespace: "{{ kuadrant_namespace }}"
+          condition: {type: Ready, status: "True"}
+
+  # 4. Red Hat OpenShift AI 3.5 + DataScienceCluster (KServe RawDeployment).
+  - key: rhoai
+    name: rhods-operator
+    namespace: redhat-ods-operator
+    channel: stable-3.5
+    starting_csv: rhods-operator.3.5.1            # resolved on OCP 4.22.14 on 2026-09-23
+    source: redhat-operators
+    source_namespace: openshift-marketplace
+    install_plan_approval: Manual
+    create_operator_group: true
+    operator_group_all_namespaces: true
+    csv_wait_timeout: 1200
+    enabled: true
+    post_install:
+      - template: rhoai-dsc.yaml.j2
+        vars:
+          name: "{{ rhoai_dsc_name }}"
+          components: "{{ rhoai_dsc_components }}"
+        wait:
+          api_version: datasciencecluster.opendatahub.io/v2
+          kind: DataScienceCluster
+          name: "{{ rhoai_dsc_name }}"
+          status_field: phase
+          value: Ready
+          timeout: 1200
+
+  # 5-6. GPU stack, only when gpu_enabled (NFD labels are needed by the ClusterPolicy).
+  - key: nfd
+    name: nfd
+    namespace: openshift-nfd
+    namespace_cluster_monitoring: true
+    channel: stable                               # only channel; tracks the OCP minor
+    starting_csv: nfd.4.22.0-202609151747         # resolved on OCP 4.22.14 on 2026-09-23
+    source: redhat-operators
+    source_namespace: openshift-marketplace
+    install_plan_approval: Manual
+    create_operator_group: true
+    operator_group_all_namespaces: false
+    enabled: "{{ gpu_enabled }}"
+    post_install:
+      - template: nfd-instance.yaml.j2
+        vars:
+          name: "{{ nfd_instance_name }}"
+          namespace: openshift-nfd
+        wait:
+          api_version: nfd.openshift.io/v1
+          kind: NodeFeatureDiscovery
+          name: "{{ nfd_instance_name }}"
+          namespace: openshift-nfd
+          condition: {type: Available, status: "True"}
+
+  - key: gpu_operator
+    name: gpu-operator-certified
+    namespace: nvidia-gpu-operator
+    namespace_cluster_monitoring: true
+    channel: v26.7
+    starting_csv: gpu-operator-certified.v26.7.0  # resolved on OCP 4.22.14 on 2026-09-23
+    source: certified-operators
+    source_namespace: openshift-marketplace
+    install_plan_approval: Manual
+    create_operator_group: true
+    operator_group_all_namespaces: false
+    csv_wait_timeout: 1200
+    enabled: "{{ gpu_enabled }}"
+    post_install:
+      - template: gpu-cluster-policy.yaml.j2
+        vars:
+          name: "{{ gpu_cluster_policy_name }}"
+          mig_strategy: "{{ gpu_mig_strategy }}"
+          driver_enabled: "{{ gpu_driver_enabled }}"
+          dcgm_exporter_enabled: "{{ gpu_dcgm_exporter_enabled }}"
+        wait:
+          api_version: nvidia.com/v1
+          kind: ClusterPolicy
+          name: "{{ gpu_cluster_policy_name }}"
+          status_field: state
+          value: ready
+          timeout: 1800
+
+  # Not needed by RHOAI 3.5 (KServe is RawDeployment-only). Kept pinned and disabled.
+  - key: servicemesh
+    name: servicemeshoperator3
+    namespace: openshift-operators
+    manage_namespace: false
+    channel: stable-3.4
+    starting_csv: servicemeshoperator3.v3.4.2     # resolved on OCP 4.22.14 on 2026-09-23
+    source: redhat-operators
+    source_namespace: openshift-marketplace
+    install_plan_approval: Manual
+    create_operator_group: false
+    enabled: false
+
+  - key: serverless
+    name: serverless-operator
+    namespace: openshift-serverless
+    channel: stable-1.37
+    starting_csv: serverless-operator.v1.37.1     # resolved on OCP 4.22.14 on 2026-09-23
+    source: redhat-operators
+    source_namespace: openshift-marketplace
+    install_plan_approval: Manual
+    create_operator_group: true
+    operator_group_all_namespaces: true
+    enabled: false

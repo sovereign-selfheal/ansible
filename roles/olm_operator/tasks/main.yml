@@ -1,0 +1,80 @@
+---
+# Install one OLM operator described by `olm_operator_spec` (an entry of `operators`).
+# Flow: validate pin -> Namespace -> OperatorGroup -> pre_install -> Subscription (Manual, startingCSV)
+#       -> verify + approve the InstallPlan -> CSV Succeeded -> post_install CRs -> report.
+
+- name: Resolve operator settings
+  ansible.builtin.set_fact:
+    olm_operator_key: "{{ olm_operator_spec.key | default(olm_operator_spec.name) }}"
+    olm_operator_package: "{{ olm_operator_spec.name }}"
+    olm_operator_namespace: "{{ olm_operator_spec.namespace }}"
+    olm_operator_subscription_name: "{{ olm_operator_spec.subscription_name | default(olm_operator_spec.name) }}"
+    olm_operator_channel: "{{ olm_operator_spec.channel }}"
+    olm_operator_starting_csv: "{{ olm_operator_spec.starting_csv }}"
+    olm_operator_dependency_csvs: "{{ olm_operator_spec.expected_dependency_csvs | default([]) }}"
+    olm_operator_catalog: "{{ olm_operator_spec.source | default(olm_operator_source) }}"
+    olm_operator_catalog_namespace: "{{ olm_operator_spec.source_namespace | default(olm_operator_source_namespace) }}"
+    olm_operator_approval: "{{ olm_operator_spec.install_plan_approval | default(olm_operator_install_plan_approval) }}"
+    olm_operator_manage_namespace: >-
+      {{ (olm_operator_spec.manage_namespace | default(true) | bool)
+         and olm_operator_spec.namespace != olm_operator_global_namespace }}
+    olm_operator_csv_retries: >-
+      {{ ((olm_operator_spec.csv_wait_timeout | default(olm_operator_csv_wait_timeout) | int)
+          / olm_operator_poll_delay | int) | round(0, 'ceil') | int }}
+    olm_operator_ip_retries: "{{ ((olm_operator_installplan_timeout | int) / olm_operator_poll_delay | int) | round(0, 'ceil') | int }}"
+
+- name: "Install operator {{ olm_operator_key }}"
+  ansible.builtin.debug:
+    msg: >-
+      Installing {{ olm_operator_package }} from {{ olm_operator_catalog }}
+      channel={{ olm_operator_channel }} pin={{ olm_operator_starting_csv }}
+      namespace={{ olm_operator_namespace }} approval={{ olm_operator_approval }}
+      dependencies={{ olm_operator_dependency_csvs }}
+      check_mode={{ ansible_check_mode }}
+
+- name: Enforce the pinning policy
+  ansible.builtin.assert:
+    that:
+      - olm_operator_approval == 'Manual'
+      - olm_operator_starting_csv | length > 0
+      - "'TODO' not in olm_operator_starting_csv"
+      - olm_operator_channel | length > 0
+    fail_msg: >-
+      {{ olm_operator_key }}: every operator must use installPlanApproval Manual and an explicit,
+      resolved starting_csv (got approval={{ olm_operator_approval }}, starting_csv={{ olm_operator_starting_csv }}).
+      Resolve pins with scripts/resolve-operator-versions.sh.
+    quiet: true
+
+- name: Validate the pin against the catalog
+  ansible.builtin.include_tasks: validate.yml
+
+- name: Namespace and OperatorGroup
+  ansible.builtin.include_tasks: operator_group.yml
+
+# Resources the operator needs at startup and that do not depend on its CRDs
+# (e.g. the GatewayClass whose Istio provider the Kuadrant operator detects only at start).
+- name: Pre-install resources
+  ansible.builtin.include_tasks: resource.yml
+  vars:
+    olm_operator_resource_gate: true
+  loop: "{{ olm_operator_spec.pre_install | default([]) }}"
+  loop_control:
+    loop_var: olm_operator_post
+    label: "{{ olm_operator_post.template | default(olm_operator_post.wait_exists.name | default('wait')) }}"
+  when: olm_operator_post.enabled | default(true) | bool
+
+- name: Subscription, InstallPlan approval and CSV wait
+  ansible.builtin.include_tasks: subscription.yml
+
+- name: Post-install resources
+  ansible.builtin.include_tasks: resource.yml
+  vars:
+    olm_operator_resource_gate: "{{ olm_operator_installed }}"
+  loop: "{{ olm_operator_spec.post_install | default([]) }}"
+  loop_control:
+    loop_var: olm_operator_post
+    label: "{{ olm_operator_post.template | default(olm_operator_post.wait_exists.name | default('wait')) }}"
+  when: olm_operator_post.enabled | default(true) | bool
+
+- name: Report
+  ansible.builtin.include_tasks: report.yml

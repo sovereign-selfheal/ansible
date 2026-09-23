@@ -1,0 +1,93 @@
+---
+# Namespace + OperatorGroup. An existing OperatorGroup (e.g. pre-created by RHDP) is
+# reused: a second one in the same namespace puts OLM in TooManyOperatorGroups.
+
+- name: Ensure the operator namespace exists
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ olm_operator_namespace }}"
+        labels: >-
+          {{ {'openshift.io/cluster-monitoring': 'true'}
+             if (olm_operator_spec.namespace_cluster_monitoring | default(false) | bool) else {} }}
+  when: olm_operator_manage_namespace | bool
+
+# In check mode the namespace above is only dry-run created, so namespaced objects
+# cannot be dry-run either: they are reported and skipped.
+- name: Read the operator namespace
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Namespace
+    name: "{{ olm_operator_namespace }}"
+  register: olm_operator_ns
+
+- name: Record whether namespaced objects can be applied
+  ansible.builtin.set_fact:
+    olm_operator_ns_missing_in_check: "{{ ansible_check_mode and olm_operator_ns.resources | length == 0 }}"
+
+- name: Check mode, namespace does not exist yet
+  ansible.builtin.debug:
+    msg: >-
+      {{ olm_operator_key }}: check mode, namespace {{ olm_operator_namespace }} would be created;
+      OperatorGroup and Subscription would be created in it (not dry-run).
+  when: olm_operator_ns_missing_in_check | bool
+
+- name: List OperatorGroups in the namespace
+  kubernetes.core.k8s_info:
+    api_version: operators.coreos.com/v1
+    kind: OperatorGroup
+    namespace: "{{ olm_operator_namespace }}"
+  register: olm_operator_ogs
+
+- name: Fail on more than one OperatorGroup
+  ansible.builtin.fail:
+    msg: >-
+      {{ olm_operator_key }}: namespace {{ olm_operator_namespace }} has
+      {{ olm_operator_ogs.resources | length }} OperatorGroups
+      ({{ olm_operator_ogs.resources | map(attribute='metadata.name') | join(', ') }}); OLM requires exactly one.
+  when: olm_operator_ogs.resources | length > 1
+
+- name: Require an existing OperatorGroup when this entry does not create one
+  ansible.builtin.assert:
+    that:
+      - olm_operator_ogs.resources | length == 1
+    fail_msg: >-
+      {{ olm_operator_key }}: create_operator_group is false but namespace
+      {{ olm_operator_namespace }} has no OperatorGroup.
+    quiet: true
+  when:
+    - not (olm_operator_spec.create_operator_group | default(true) | bool)
+    - not (olm_operator_ns_missing_in_check | bool)
+
+- name: Create the OperatorGroup
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: operators.coreos.com/v1
+      kind: OperatorGroup
+      metadata:
+        name: "{{ olm_operator_spec.operator_group_name | default(olm_operator_package) }}"
+        namespace: "{{ olm_operator_namespace }}"
+      spec: >-
+        {{ {} if (olm_operator_spec.operator_group_all_namespaces | default(true) | bool)
+           else {'targetNamespaces': [olm_operator_namespace]} }}
+  when:
+    - olm_operator_spec.create_operator_group | default(true) | bool
+    - olm_operator_ogs.resources | length == 0
+    - not (olm_operator_ns_missing_in_check | bool)
+
+- name: Reuse the existing OperatorGroup
+  vars:
+    olm_operator_og: "{{ olm_operator_ogs.resources | first }}"
+    olm_operator_og_all: "{{ olm_operator_og.spec.targetNamespaces | default([]) | length == 0 }}"
+    olm_operator_want_all: "{{ olm_operator_spec.operator_group_all_namespaces | default(true) | bool }}"
+  ansible.builtin.debug:
+    msg: >-
+      {{ olm_operator_key }}: reusing OperatorGroup {{ olm_operator_og.metadata.name }}
+      (targetNamespaces={{ olm_operator_og.spec.targetNamespaces | default('all namespaces') }})
+      {{ '' if olm_operator_og_all == olm_operator_want_all
+         else '- WARNING: scope differs from operator_group_all_namespaces=' ~ olm_operator_want_all }}
+  when: olm_operator_ogs.resources | length == 1

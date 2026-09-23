@@ -1,0 +1,23 @@
+# Credentials and cluster access: never commit
+*.kubeconfig
+kubeconfig
+.kubeconfig*
+.vault-password
+.vault-pass
+*.pem
+*.key
+.secrets/
+
+# Ansible / Python artefacts
+*.retry
+collections/
+.ansible/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store

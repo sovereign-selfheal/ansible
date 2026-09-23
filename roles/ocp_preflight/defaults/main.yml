@@ -1,0 +1,19 @@
+---
+# ocp_preflight: read-only checks before any change to the cluster.
+
+# OpenShift minor the operator pins were resolved on; anything else fails.
+ocp_preflight_required_version: "{{ ocp_min_version | default('4.22') }}"
+# Require a default StorageClass (RHOAI workbenches and model PVCs need one).
+ocp_preflight_require_default_storageclass: true
+# GPU node check, only when gpu_enabled. A node counts as a GPU node if it matches the
+# label selector OR its instance type matches the regex (labels from NFD/GPU operator do
+# not exist yet on a fresh cluster).
+ocp_preflight_gpu_enabled: "{{ gpu_enabled | default(false) }}"
+ocp_preflight_gpu_node_label_selector: nvidia.com/gpu.present=true
+ocp_preflight_gpu_instance_type_regex: '^(g4dn|g5|g6|g6e|gr6|p3|p4d|p4de|p5|p5e)\.'
+ocp_preflight_gpu_min_nodes: 1
+# Catalog sources the enabled operators come from must be READY.
+ocp_preflight_catalog_sources: >-
+  {{ operators | default([]) | selectattr('enabled', 'defined') | selectattr('enabled')
+     | map(attribute='source') | unique | list }}
+ocp_preflight_catalog_namespace: openshift-marketplace

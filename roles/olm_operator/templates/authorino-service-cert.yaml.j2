@@ -1,0 +1,10 @@
+---
+# Patch: asks the OpenShift service CA to mint the Authorino serving certificate
+# (replaces `oc annotate svc/authorino-authorino-authorization` of the old repo).
+apiVersion: v1
+kind: Service
+metadata:
+  name: authorino-authorino-authorization
+  namespace: {{ namespace }}
+  annotations:
+    service.beta.openshift.io/serving-cert-secret-name: authorino-server-cert

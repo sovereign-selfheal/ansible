@@ -1,0 +1,254 @@
+---
+# Subscription with startingCSV + Manual approval, then approve ONLY an InstallPlan
+# that contains the pinned CSV (plus the declared dependency CSVs), then wait for it.
+
+- name: Read the pinned ClusterServiceVersion
+  kubernetes.core.k8s_info:
+    api_version: operators.coreos.com/v1alpha1
+    kind: ClusterServiceVersion
+    name: "{{ olm_operator_starting_csv }}"
+    namespace: "{{ olm_operator_namespace }}"
+  register: olm_operator_csv_before
+
+- name: List Subscriptions in the namespace
+  kubernetes.core.k8s_info:
+    api_version: operators.coreos.com/v1alpha1
+    kind: Subscription
+    namespace: "{{ olm_operator_namespace }}"
+  register: olm_operator_subs
+
+- name: Record the current install state
+  vars:
+    olm_operator_sub_current: >-
+      {{ olm_operator_subs.resources | selectattr('metadata.name', 'equalto', olm_operator_subscription_name) | list }}
+  ansible.builtin.set_fact:
+    olm_operator_effective_csv: "{{ olm_operator_starting_csv }}"
+    olm_operator_installed: >-
+      {{ (olm_operator_csv_before.resources | length > 0)
+         and ((olm_operator_csv_before.resources | first).status.phase | default('') == 'Succeeded') }}
+    olm_operator_installed_csv: >-
+      {{ (olm_operator_sub_current | first).status.installedCSV | default('')
+         if olm_operator_sub_current | length > 0 else '' }}
+    olm_operator_duplicate_subs: >-
+      {{ olm_operator_subs.resources
+         | selectattr('spec.name', 'equalto', olm_operator_package)
+         | rejectattr('metadata.name', 'equalto', olm_operator_subscription_name)
+         | map(attribute='metadata.name') | list }}
+
+- name: Fail if another Subscription already owns this package
+  ansible.builtin.fail:
+    msg: >-
+      {{ olm_operator_key }}: package {{ olm_operator_package }} is already subscribed in
+      {{ olm_operator_namespace }} by {{ olm_operator_duplicate_subs }}. Set subscription_name to adopt it
+      or remove it by hand.
+  when: olm_operator_duplicate_subs | length > 0
+
+# A pre-installed operator (e.g. by RHDP) can run a newer version than the pin. OLM cannot
+# downgrade it: accept it only when the entry sets allow_newer_installed, otherwise stop
+# BEFORE changing the Subscription.
+- name: Read the installed ClusterServiceVersion
+  kubernetes.core.k8s_info:
+    api_version: operators.coreos.com/v1alpha1
+    kind: ClusterServiceVersion
+    name: "{{ olm_operator_installed_csv }}"
+    namespace: "{{ olm_operator_namespace }}"
+  register: olm_operator_csv_installed
+  when:
+    - olm_operator_installed_csv | length > 0
+    - olm_operator_installed_csv != olm_operator_starting_csv
+
+- name: Compare the installed version with the pin
+  vars:
+    olm_operator_iv: >-
+      {{ (olm_operator_csv_installed.resources | default([]) | first | default({})).spec.version | default('') }}
+  ansible.builtin.set_fact:
+    olm_operator_installed_version: "{{ olm_operator_iv }}"
+    olm_operator_newer_installed: >-
+      {{ olm_operator_iv | length > 0 and olm_operator_iv is ansible.builtin.version(olm_operator_pin_version, '>') }}
+
+- name: Fail if a newer version than the pin is installed
+  ansible.builtin.fail:
+    msg: >-
+      {{ olm_operator_key }}: {{ olm_operator_installed_csv }} ({{ olm_operator_installed_version }}) is installed,
+      newer than the pin {{ olm_operator_starting_csv }} ({{ olm_operator_pin_version }}). OLM cannot downgrade.
+      Update channel/starting_csv in group_vars (scripts/resolve-operator-versions.sh), or set
+      allow_newer_installed: true for operators pre-installed by the platform. The Subscription was not changed.
+  when:
+    - olm_operator_newer_installed | bool
+    - not (olm_operator_spec.allow_newer_installed | default(false) | bool)
+
+- name: Assert the newer pre-installed version is healthy
+  ansible.builtin.assert:
+    that:
+      - (olm_operator_csv_installed.resources | first).status.phase | default('') == 'Succeeded'
+    fail_msg: >-
+      {{ olm_operator_key }}: pre-installed {{ olm_operator_installed_csv }} is not Succeeded
+      (phase {{ (olm_operator_csv_installed.resources | first).status.phase | default('n/a') }}); re-run when OLM has finished.
+    quiet: true
+  when: olm_operator_newer_installed | bool
+
+- name: Accept the newer pre-installed version
+  ansible.builtin.set_fact:
+    olm_operator_installed: true
+    olm_operator_effective_csv: "{{ olm_operator_installed_csv }}"
+  when: olm_operator_newer_installed | bool
+
+- name: Report a newer pre-installed version
+  ansible.builtin.debug:
+    msg: >-
+      {{ olm_operator_key }}: keeping pre-installed {{ olm_operator_installed_csv }} ({{ olm_operator_installed_version }}),
+      newer than the pin {{ olm_operator_pin_version }} (allow_newer_installed). Only installPlanApproval is set to
+      Manual; channel and startingCSV are left as they are, so the version is frozen from now on.
+  when: olm_operator_newer_installed | bool
+
+- name: Report a version change requested by the pin
+  ansible.builtin.debug:
+    msg: >-
+      {{ olm_operator_key }}: installedCSV is {{ olm_operator_installed_csv }}, pin is {{ olm_operator_starting_csv }}.
+      Only an InstallPlan that proposes exactly the pin will be approved.
+  when:
+    - olm_operator_installed_csv | length > 0
+    - olm_operator_installed_csv != olm_operator_starting_csv
+    - not (olm_operator_newer_installed | bool)
+
+- name: Freeze the newer pre-installed version (Manual approval only)
+  kubernetes.core.k8s:
+    state: patched
+    api_version: operators.coreos.com/v1alpha1
+    kind: Subscription
+    name: "{{ olm_operator_subscription_name }}"
+    namespace: "{{ olm_operator_namespace }}"
+    merge_type: merge
+    definition:
+      spec:
+        installPlanApproval: "{{ olm_operator_approval }}"
+  when: olm_operator_newer_installed | bool
+
+# Adopts a pre-existing Subscription with the same name: channel, approval and
+# startingCSV are reconciled in place (merge patch), no reinstall happens.
+- name: Ensure the Subscription (Manual, pinned startingCSV)
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: operators.coreos.com/v1alpha1
+      kind: Subscription
+      metadata:
+        name: "{{ olm_operator_subscription_name }}"
+        namespace: "{{ olm_operator_namespace }}"
+      spec: >-
+        {{ {'name': olm_operator_package,
+            'channel': olm_operator_channel,
+            'source': olm_operator_catalog,
+            'sourceNamespace': olm_operator_catalog_namespace,
+            'installPlanApproval': olm_operator_approval,
+            'startingCSV': olm_operator_starting_csv}
+           | combine({'config': olm_operator_spec.subscription_config} if olm_operator_spec.subscription_config is defined else {}) }}
+  when:
+    - not (olm_operator_ns_missing_in_check | bool)
+    - not (olm_operator_newer_installed | bool)
+
+- name: Installed CSV already Succeeded, skipping InstallPlan approval
+  ansible.builtin.debug:
+    msg: "{{ olm_operator_key }}: {{ olm_operator_effective_csv }} is Succeeded in {{ olm_operator_namespace }}"
+  when: olm_operator_installed | bool
+
+- name: Check mode, skipping InstallPlan approval and waits
+  ansible.builtin.debug:
+    msg: "{{ olm_operator_key }}: check mode, {{ olm_operator_starting_csv }} is not installed yet; approval and waits skipped"
+  when:
+    - ansible_check_mode
+    - not (olm_operator_installed | bool)
+
+- name: Approve the pinned InstallPlan and wait for the CSV
+  when:
+    - not ansible_check_mode
+    - not (olm_operator_installed | bool)
+  block:
+    # UpgradePending = an InstallPlan waits for approval; currentCSV == pin covers a re-run
+    # after the plan was already approved but the CSV was still installing.
+    - name: Wait for OLM to propose an InstallPlan
+      kubernetes.core.k8s_info:
+        api_version: operators.coreos.com/v1alpha1
+        kind: Subscription
+        name: "{{ olm_operator_subscription_name }}"
+        namespace: "{{ olm_operator_namespace }}"
+      register: olm_operator_sub
+      until:
+        - olm_operator_sub.resources | length == 1
+        - (olm_operator_sub.resources | first).status.installPlanRef.name is defined
+        - >-
+          (olm_operator_sub.resources | first).status.state | default('') == 'UpgradePending'
+          or (olm_operator_sub.resources | first).status.currentCSV | default('') == olm_operator_starting_csv
+      retries: "{{ olm_operator_ip_retries }}"
+      delay: "{{ olm_operator_poll_delay }}"
+      failed_when: false
+
+    - name: Assert OLM proposed an InstallPlan for the pin
+      ansible.builtin.assert:
+        that:
+          - olm_operator_sub.resources | default([]) | length == 1
+          - (olm_operator_sub.resources | first).status.installPlanRef.name is defined
+          - >-
+            (olm_operator_sub.resources | first).status.state | default('') == 'UpgradePending'
+            or (olm_operator_sub.resources | first).status.currentCSV | default('') == olm_operator_starting_csv
+        fail_msg: >-
+          {{ olm_operator_key }}: no InstallPlan for {{ olm_operator_starting_csv }} after {{ olm_operator_installplan_timeout }}s.
+          Subscription status: state={{ (olm_operator_sub.resources | default([{}]) | first).status.state | default('n/a') }},
+          currentCSV={{ (olm_operator_sub.resources | default([{}]) | first).status.currentCSV | default('n/a') }},
+          installedCSV={{ (olm_operator_sub.resources | default([{}]) | first).status.installedCSV | default('n/a') }}.
+          If a newer CSV is installed, the pin cannot be reached (OLM does not downgrade).
+        quiet: true
+
+    - name: Read the InstallPlan
+      kubernetes.core.k8s_info:
+        api_version: operators.coreos.com/v1alpha1
+        kind: InstallPlan
+        name: "{{ (olm_operator_sub.resources | first).status.installPlanRef.name }}"
+        namespace: "{{ olm_operator_namespace }}"
+      register: olm_operator_ip
+
+    - name: Verify the InstallPlan proposes exactly the pinned CSV
+      vars:
+        olm_operator_ip_csvs: "{{ (olm_operator_ip.resources | first).spec.clusterServiceVersionNames }}"
+        olm_operator_ip_unexpected: >-
+          {{ olm_operator_ip_csvs | difference([olm_operator_starting_csv] + olm_operator_dependency_csvs) }}
+      ansible.builtin.assert:
+        that:
+          - olm_operator_starting_csv in olm_operator_ip_csvs
+          - olm_operator_ip_unexpected | length == 0
+        fail_msg: >-
+          REFUSING TO APPROVE InstallPlan {{ (olm_operator_ip.resources | first).metadata.name }}
+          in {{ olm_operator_namespace }} for {{ olm_operator_key }}: it proposes {{ olm_operator_ip_csvs }},
+          expected {{ olm_operator_starting_csv }} plus only {{ olm_operator_dependency_csvs }}
+          (unexpected: {{ olm_operator_ip_unexpected }}). Resolve the pins on the cluster and update group_vars.
+        success_msg: "InstallPlan {{ (olm_operator_ip.resources | first).metadata.name }} proposes {{ olm_operator_ip_csvs }}"
+
+    - name: Approve the InstallPlan
+      kubernetes.core.k8s:
+        state: patched
+        api_version: operators.coreos.com/v1alpha1
+        kind: InstallPlan
+        name: "{{ (olm_operator_ip.resources | first).metadata.name }}"
+        namespace: "{{ olm_operator_namespace }}"
+        merge_type: merge
+        definition:
+          spec:
+            approved: true
+      when: not ((olm_operator_ip.resources | first).spec.approved | bool)
+
+    - name: Wait for the pinned CSV to reach Succeeded
+      kubernetes.core.k8s_info:
+        api_version: operators.coreos.com/v1alpha1
+        kind: ClusterServiceVersion
+        name: "{{ olm_operator_starting_csv }}"
+        namespace: "{{ olm_operator_namespace }}"
+      register: olm_operator_csv
+      until:
+        - olm_operator_csv.resources | length == 1
+        - (olm_operator_csv.resources | first).status.phase | default('') == 'Succeeded'
+      retries: "{{ olm_operator_csv_retries }}"
+      delay: "{{ olm_operator_poll_delay }}"
+
+    - name: Mark the operator installed
+      ansible.builtin.set_fact:
+        olm_operator_installed: true

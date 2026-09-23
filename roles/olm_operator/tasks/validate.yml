@@ -1,0 +1,42 @@
+---
+# Fail early if the catalog does not offer the pinned channel/CSV. The catalog label
+# selector matters: some packages exist in more than one catalog.
+
+- name: Look up the PackageManifest in its catalog
+  kubernetes.core.k8s_info:
+    api_version: packages.operators.coreos.com/v1
+    kind: PackageManifest
+    namespace: "{{ olm_operator_catalog_namespace }}"
+    label_selectors:
+      - "catalog={{ olm_operator_catalog }}"
+    field_selectors:
+      - "metadata.name={{ olm_operator_package }}"
+  register: olm_operator_pkg
+
+- name: Assert the pinned channel and CSV are offered by the catalog
+  vars:
+    olm_operator_pkg_channel: >-
+      {{ (olm_operator_pkg.resources | first).status.channels
+         | selectattr('name', 'equalto', olm_operator_channel) | list }}
+    olm_operator_pkg_entries: >-
+      {{ (olm_operator_pkg_channel | first).entries | default([]) | map(attribute='name') | list
+         if olm_operator_pkg_channel | length > 0 else [] }}
+  ansible.builtin.assert:
+    that:
+      - olm_operator_pkg.resources | length == 1
+      - olm_operator_pkg_channel | length == 1
+      - olm_operator_starting_csv in olm_operator_pkg_entries
+    fail_msg: >-
+      {{ olm_operator_key }}: package {{ olm_operator_package }} in catalog {{ olm_operator_catalog }}
+      does not offer {{ olm_operator_starting_csv }} in channel {{ olm_operator_channel }}.
+      Channel entries: {{ olm_operator_pkg_entries }}. Re-run scripts/resolve-operator-versions.sh.
+    quiet: true
+
+- name: Record the pinned version
+  vars:
+    olm_operator_pkg_channel: >-
+      {{ (olm_operator_pkg.resources | first).status.channels
+         | selectattr('name', 'equalto', olm_operator_channel) | first }}
+  ansible.builtin.set_fact:
+    olm_operator_pin_version: >-
+      {{ (olm_operator_pkg_channel.entries | selectattr('name', 'equalto', olm_operator_starting_csv) | first).version }}

@@ -1,0 +1,9 @@
+---
+# Runs from a bastion or laptop against the cluster API; no SSH to nodes.
+# Authentication comes from $KUBECONFIG (or K8S_AUTH_* env vars) of the caller.
+# group_vars/ is a symlink to the repo-root group_vars/ so Ansible loads it for this inventory.
+all:
+  hosts:
+    localhost:
+      ansible_connection: local
+      ansible_python_interpreter: "{{ ansible_playbook_python }}"

@@ -1,0 +1,31 @@
+---
+# Report pending (unapproved) InstallPlans: OLM creates them when a newer CSV appears in
+# the channel. They are never approved by this role; a human bumps the pin instead.
+
+- name: List InstallPlans in the namespace
+  kubernetes.core.k8s_info:
+    api_version: operators.coreos.com/v1alpha1
+    kind: InstallPlan
+    namespace: "{{ olm_operator_namespace }}"
+  register: olm_operator_ips
+
+- name: Record the result for the final summary
+  vars:
+    olm_operator_pending: >-
+      {{ olm_operator_ips.resources
+         | rejectattr('spec.approved')
+         | map(attribute='spec.clusterServiceVersionNames') | flatten | unique | list }}
+  ansible.builtin.set_fact:
+    olm_operator_report: >-
+      {{ olm_operator_report | default([]) + [{
+           'key': olm_operator_key,
+           'namespace': olm_operator_namespace,
+           'pinned_csv': olm_operator_starting_csv,
+           'installed_csv': olm_operator_effective_csv,
+           'newer_than_pin_kept': olm_operator_newer_installed | bool,
+           'installed': olm_operator_installed | bool,
+           'pending_unapproved_csvs': olm_operator_pending}] }}
+
+- name: "Summary for {{ olm_operator_key }}"
+  ansible.builtin.debug:
+    msg: "{{ olm_operator_report | last }}"

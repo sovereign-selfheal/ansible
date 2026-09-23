@@ -1,0 +1,20 @@
+---
+# olm_operator: install one OLM operator, pinned and Manual-approved.
+# The operator entry is passed as `olm_operator_spec` (see README.md for its fields);
+# the values below are the defaults used when an entry omits a field.
+
+olm_operator_source: redhat-operators
+olm_operator_source_namespace: openshift-marketplace
+olm_operator_install_plan_approval: Manual
+
+# Wait for subscription.status.installPlanRef (seconds).
+olm_operator_installplan_timeout: 300
+# Wait for the pinned CSV to reach Succeeded (seconds). AGENTS.md requires >= 15 min.
+olm_operator_csv_wait_timeout: 900
+# Default timeout for post_install readiness waits (seconds).
+olm_operator_post_install_timeout: 600
+# Poll interval for every wait (seconds).
+olm_operator_poll_delay: 10
+
+# Namespace that holds the global OperatorGroup; never managed by this role.
+olm_operator_global_namespace: openshift-operators

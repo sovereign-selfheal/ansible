@@ -1,0 +1,12 @@
+---
+galaxy_info:
+  role_name: gpu_node_prep
+  namespace: sovereign_selfheal
+  author: sovereign-selfheal demo team
+  description: Create GPU MachineSets (one per availability zone) on OpenShift on AWS
+  license: Apache-2.0
+  min_ansible_version: "2.18"
+  platforms:
+    - name: GenericLinux
+      versions: [all]
+dependencies: []

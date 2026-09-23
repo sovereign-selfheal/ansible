@@ -1,0 +1,24 @@
+---
+# NodeFeatureDiscovery operand, from the alm-examples of the pinned NFD CSV.
+# The operator's default worker config already labels PCI vendors (10de = NVIDIA).
+apiVersion: nfd.openshift.io/v1
+kind: NodeFeatureDiscovery
+metadata:
+  name: {{ name }}
+  namespace: {{ namespace }}
+spec:
+  operand:
+    imagePullPolicy: IfNotPresent
+    servicePort: 12000
+  workerConfig:
+    configData: |
+      core:
+        sleepInterval: 60s
+      sources:
+        pci:
+          deviceClassWhitelist:
+            - "0200"
+            - "03"
+            - "12"
+          deviceLabelFields:
+            - "vendor"

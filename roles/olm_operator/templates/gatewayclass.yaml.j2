@@ -1,0 +1,10 @@
+---
+# OCP-native Gateway API implementation: creating it makes the Ingress Operator deploy
+# its Istio-based gateway control plane in openshift-ingress. Kuadrant needs it to be Ready.
+# Ported from rhocpai-mvp-routing manifests/20-gateway/00-gatewayclass.yaml.
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: {{ name }}
+spec:
+  controllerName: {{ controller_name }}

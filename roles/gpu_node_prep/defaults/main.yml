@@ -1,0 +1,25 @@
+---
+# gpu_node_prep: one GPU MachineSet per availability zone, cloned from the worker
+# MachineSet of that zone (AWS only). Only the first `gpu_node_prep_active_zone_count`
+# zones get `gpu_node_prep_replicas` machines; the others are created with 0 replicas.
+
+gpu_node_prep_instance_type: g6.xlarge          # 1x NVIDIA L4 24 GB
+# Zones to cover. Empty: every zone that has a worker MachineSet, sorted by name.
+gpu_node_prep_zones: []
+gpu_node_prep_active_zone_count: 1
+gpu_node_prep_replicas: 1                       # per active zone; 0 scales every GPU MachineSet down
+
+# Labels and taints for the GPU nodes. The taint keeps non-GPU workloads away; the NVIDIA
+# daemonsets tolerate it by default, GPU workloads must tolerate it.
+gpu_node_prep_node_labels:
+  node-role.kubernetes.io/gpu: ""
+gpu_node_prep_taints:
+  - key: nvidia.com/gpu
+    value: "true"
+    effect: NoSchedule
+
+# Wait for machines to be Running (or gone, when scaling down).
+gpu_node_prep_timeout: 1500
+gpu_node_prep_poll_delay: 15
+
+gpu_node_prep_machine_api_namespace: openshift-machine-api

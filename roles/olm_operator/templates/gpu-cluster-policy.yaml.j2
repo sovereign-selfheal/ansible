@@ -1,0 +1,37 @@
+---
+# NVIDIA ClusterPolicy, reduced from the alm-examples of the pinned GPU operator CSV.
+# Only the tunables used by the demo are parametrised; the operator defaults the rest.
+apiVersion: nvidia.com/v1
+kind: ClusterPolicy
+metadata:
+  name: {{ name }}
+spec:
+  operator:
+    use_ocp_driver_toolkit: true
+  cdi:
+    enabled: true
+  daemonsets:
+    updateStrategy: RollingUpdate
+  driver:
+    enabled: {{ driver_enabled | bool | lower }}
+  toolkit:
+    enabled: true
+  devicePlugin:
+    enabled: true
+  dcgm:
+    enabled: true
+  dcgmExporter:
+    enabled: {{ dcgm_exporter_enabled | bool | lower }}
+    serviceMonitor:
+      enabled: {{ dcgm_exporter_enabled | bool | lower }}
+  gfd:
+    enabled: true
+  migManager:
+    enabled: true
+  mig:
+    strategy: {{ mig_strategy }}
+  nodeStatusExporter:
+    enabled: true
+  validator:
+    plugin:
+      env: []

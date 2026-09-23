@@ -1,0 +1,13 @@
+---
+# Read-only checks: cluster reachable, OpenShift 4.22, default StorageClass,
+# catalogs READY, GPU nodes when gpu_enabled. Fails before any change is made.
+- name: Preflight
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Run the preflight checks
+      ansible.builtin.include_role:
+        name: ocp_preflight
+        apply:
+          tags: [ocp_preflight, preflight]
+      tags: always
