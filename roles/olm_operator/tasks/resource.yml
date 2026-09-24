@@ -56,6 +56,12 @@
       register: olm_operator_post_status
       until:
         - olm_operator_post_status.resources | length == 1
+        # After a change, the status is valid only once the operator has seen the new
+        # generation (when the object reports status.observedGeneration).
+        - >-
+          ((olm_operator_post_status.resources | first).status | default({})).observedGeneration
+          | default((olm_operator_post_status.resources | first).metadata.generation)
+          == (olm_operator_post_status.resources | first).metadata.generation
         - >-
           ((olm_operator_post_status.resources | first).status | default({}))[olm_operator_post.wait.status_field]
           | default('') == olm_operator_post.wait.value
