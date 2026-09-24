@@ -23,6 +23,7 @@
            'pinned_csv': olm_operator_starting_csv,
            'installed_csv': olm_operator_effective_csv,
            'newer_than_pin_kept': olm_operator_newer_installed | bool,
+           'pin_in_catalog': olm_operator_pin_in_catalog | bool,
            'installed': olm_operator_installed | bool,
            'pending_unapproved_csvs': olm_operator_pending}] }}
 

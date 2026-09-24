@@ -1,6 +1,9 @@
 ---
-# Fail early if the catalog does not offer the pinned channel/CSV. The catalog label
-# selector matters: some packages exist in more than one catalog.
+# Check that the catalog offers the pinned channel/CSV. The catalog label selector
+# matters: some packages exist in more than one catalog.
+# A missing pin is an error only when the operator still has to be installed. When the
+# pinned CSV is already Succeeded, the catalog is not needed any more (a catalog can drop
+# a version later), so it is only a warning.
 
 - name: Look up the PackageManifest in its catalog
   kubernetes.core.k8s_info:
@@ -13,30 +16,58 @@
       - "metadata.name={{ olm_operator_package }}"
   register: olm_operator_pkg
 
-- name: Assert the pinned channel and CSV are offered by the catalog
+- name: Look up the pinned CSV on the cluster
+  kubernetes.core.k8s_info:
+    api_version: operators.coreos.com/v1alpha1
+    kind: ClusterServiceVersion
+    name: "{{ olm_operator_starting_csv }}"
+    namespace: "{{ olm_operator_namespace }}"
+  register: olm_operator_pin_csv
+
+- name: Compare the pin with the catalog
   vars:
     olm_operator_pkg_channel: >-
-      {{ (olm_operator_pkg.resources | first).status.channels
-         | selectattr('name', 'equalto', olm_operator_channel) | list }}
+      {{ ((olm_operator_pkg.resources | first).status.channels | default([]))
+         | selectattr('name', 'equalto', olm_operator_channel) | list
+         if olm_operator_pkg.resources | length == 1 else [] }}
+  ansible.builtin.set_fact:
     olm_operator_pkg_entries: >-
-      {{ (olm_operator_pkg_channel | first).entries | default([]) | map(attribute='name') | list
+      {{ (olm_operator_pkg_channel | first).entries | default([]) | list
          if olm_operator_pkg_channel | length > 0 else [] }}
+    olm_operator_pin_installed: >-
+      {{ olm_operator_pin_csv.resources | length > 0
+         and (olm_operator_pin_csv.resources | first).status.phase | default('') == 'Succeeded' }}
+
+- name: Record the pin status in the catalog
+  ansible.builtin.set_fact:
+    olm_operator_pin_in_catalog: "{{ olm_operator_starting_csv in (olm_operator_pkg_entries | map(attribute='name') | list) }}"
+
+- name: Assert the pinned channel and CSV are offered by the catalog
   ansible.builtin.assert:
     that:
-      - olm_operator_pkg.resources | length == 1
-      - olm_operator_pkg_channel | length == 1
-      - olm_operator_starting_csv in olm_operator_pkg_entries
+      - olm_operator_pin_in_catalog | bool
     fail_msg: >-
       {{ olm_operator_key }}: package {{ olm_operator_package }} in catalog {{ olm_operator_catalog }}
       does not offer {{ olm_operator_starting_csv }} in channel {{ olm_operator_channel }}.
-      Channel entries: {{ olm_operator_pkg_entries }}. Re-run scripts/resolve-operator-versions.sh.
+      Channel entries: {{ olm_operator_pkg_entries | map(attribute='name') | list }}.
+      Re-run scripts/resolve-operator-versions.sh.
     quiet: true
+  when: not (olm_operator_pin_installed | bool)
+
+- name: Warn that the catalog no longer offers the installed pin
+  ansible.builtin.debug:
+    msg: >-
+      WARNING {{ olm_operator_key }}: {{ olm_operator_starting_csv }} is installed and Succeeded, but the catalog
+      {{ olm_operator_catalog }} no longer offers it in channel {{ olm_operator_channel }}
+      (entries: {{ olm_operator_pkg_entries | map(attribute='name') | list }}). This cluster keeps working;
+      a new cluster cannot install this pin. Review the pin with scripts/resolve-operator-versions.sh.
+  when:
+    - olm_operator_pin_installed | bool
+    - not (olm_operator_pin_in_catalog | bool)
 
 - name: Record the pinned version
-  vars:
-    olm_operator_pkg_channel: >-
-      {{ (olm_operator_pkg.resources | first).status.channels
-         | selectattr('name', 'equalto', olm_operator_channel) | first }}
   ansible.builtin.set_fact:
     olm_operator_pin_version: >-
-      {{ (olm_operator_pkg_channel.entries | selectattr('name', 'equalto', olm_operator_starting_csv) | first).version }}
+      {{ (olm_operator_pkg_entries | selectattr('name', 'equalto', olm_operator_starting_csv) | first).version
+         if olm_operator_pin_in_catalog | bool
+         else (olm_operator_pin_csv.resources | first).spec.version }}
