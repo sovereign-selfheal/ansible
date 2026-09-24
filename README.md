@@ -83,7 +83,21 @@ ansible-vault encrypt group_vars/all/vault.yml
 ansible-vault edit group_vars/all/vault.yml
 ```
 
-Then add `--ask-vault-pass` (or `--vault-password-file <file>`) to every `ansible-playbook` command.
+Then run the playbooks with `scripts/run-playbook.sh` (from the repo root). It adds the vault password
+file when it finds one, in this order:
+
+1. `$ANSIBLE_VAULT_PASSWORD_FILE`, if set;
+2. `~/.config/sovereign-selfheal/vault-pass` (recommended: outside the repo, `chmod 600`);
+3. `.vault-pass` in the repo root (ignored by git).
+
+With a vault but no password file, it asks for the password. Without a vault, it runs in local-only
+mode. Keep the password file out of the repo when you can: `.gitignore` is only a safety net.
+
+```bash
+mkdir -p ~/.config/sovereign-selfheal
+( umask 077; read -rs -p 'Vault password: ' p && printf '%s\n' "$p" > ~/.config/sovereign-selfheal/vault-pass )
+scripts/run-playbook.sh playbooks/site.yml
+```
 
 ## Run
 
@@ -92,8 +106,7 @@ Then add `--ask-vault-pass` (or `--vault-password-file <file>`) to every `ansibl
 ansible-playbook playbooks/site.yml --check --diff
 
 # full bootstrap: preflight, operators, prerequisites, GitOps seed
-ansible-playbook playbooks/site.yml --ask-vault-pass      # hybrid routing (vault with the SOTA settings)
-ansible-playbook playbooks/site.yml                        # local-only mode (no vault file)
+scripts/run-playbook.sh playbooks/site.yml   # hybrid routing with a vault, local-only mode without
 
 # a single operator
 ansible-playbook playbooks/10-operators.yml --tags rhoai

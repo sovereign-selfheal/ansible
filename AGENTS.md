@@ -52,7 +52,8 @@ Target platform: **demo.redhat.com** (RHDP). The code must be structured so that
 │   ├── secrets_bootstrap/      # secret values for ESO + ClusterSecretStore (provider kubernetes)
 │   └── argocd_seed/
 ├── scripts/
-│   └── resolve-operator-versions.sh   # prints package/channel/currentCSV on the target cluster
+│   ├── resolve-operator-versions.sh   # prints package/channel/currentCSV on the target cluster
+│   └── run-playbook.sh                # ansible-playbook + vault password file lookup (home, then repo)
 └── tests/
     └── ...                     # ansible-lint config, molecule (optional)
 ```
@@ -183,7 +184,7 @@ export KUBECONFIG=~/.kube/demo.kubeconfig
 oc login --token=... --server=https://api.<cluster>:6443
 
 # full bootstrap
-ansible-playbook playbooks/site.yml --ask-vault-pass      # vault with the SOTA settings; without it: local-only mode
+scripts/run-playbook.sh playbooks/site.yml   # finds the vault password file; without a vault: local-only mode
 
 # single stage / operator
 ansible-playbook playbooks/10-operators.yml --tags rhoai
