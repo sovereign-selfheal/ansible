@@ -39,11 +39,18 @@ SHOW_ENTRIES=1 scripts/resolve-operator-versions.sh rhods-operator:redhat-operat
 
 ## Prerequisites
 
+The Python tools are managed with [uv](https://docs.astral.sh/uv/). `pyproject.toml` lists the
+dependencies and `uv.lock` pins their exact versions (ansible-core 2.20, the Kubernetes client,
+ansible-lint, yamllint).
+
 ```bash
-python3 -m venv .venv && . .venv/bin/activate
-pip install -r requirements.txt
-ansible-galaxy collection install -r requirements.yml
+uv sync                                                        # creates .venv from uv.lock
+uv run ansible-galaxy collection install -r requirements.yml   # Ansible collections
 ```
+
+Run every tool through uv (`uv run ansible-playbook …`, `uv run ansible-lint`) or use
+`scripts/run-playbook.sh`, which uses `uv run` by itself. To update a dependency, change
+`pyproject.toml` and run `uv lock`.
 
 The kubernetes.core modules read the cluster credentials from `$KUBECONFIG`, or from `K8S_AUTH_*`
 environment variables. The user needs `cluster-admin`.
@@ -105,19 +112,19 @@ scripts/run-playbook.sh playbooks/site.yml
 
 ```bash
 # dry run: shows diffs, skips approvals and waits
-ansible-playbook playbooks/site.yml --check --diff
+scripts/run-playbook.sh playbooks/site.yml --check --diff
 
 # full bootstrap: preflight, operators, prerequisites, GitOps seed
 scripts/run-playbook.sh playbooks/site.yml   # hybrid routing with a vault, local-only mode without
 
 # a single operator
-ansible-playbook playbooks/10-operators.yml --tags rhoai
+scripts/run-playbook.sh playbooks/10-operators.yml --tags rhoai
 
 # with GPU: operators first, then the GPU MachineSets (one run, in this order)
-ansible-playbook playbooks/site.yml -e gpu_enabled=true
+scripts/run-playbook.sh playbooks/site.yml -e gpu_enabled=true
 
 # end of the day: scale the GPU MachineSets to 0 (only stage 20, faster)
-ansible-playbook playbooks/20-prereqs.yml -e gpu_enabled=true -e gpu_node_prep_replicas=0
+scripts/run-playbook.sh playbooks/20-prereqs.yml -e gpu_enabled=true -e gpu_node_prep_replicas=0
 ```
 
 A second run must report `changed=0`:
@@ -134,9 +141,9 @@ change `channel`/`starting_csv` in `group_vars/all/main.yml` and run the playboo
 ## Lint (also run by CI on every PR)
 
 ```bash
-yamllint .
-ansible-lint
-ansible-playbook playbooks/site.yml --syntax-check
+uv run yamllint .
+uv run ansible-lint
+uv run ansible-playbook playbooks/site.yml --syntax-check
 shellcheck scripts/*.sh
 ```
 

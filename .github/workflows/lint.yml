@@ -16,25 +16,23 @@ jobs:
       - name: Check out the repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.2.0
 
-      - name: Install Python requirements
-        run: pip install -r requirements.txt
+      - name: Install Python dependencies (uv.lock)
+        run: uv sync --locked
 
       - name: Install Ansible collections
-        run: ansible-galaxy collection install -r requirements.yml
+        run: uv run ansible-galaxy collection install -r requirements.yml
 
       - name: yamllint
-        run: yamllint .
+        run: uv run yamllint .
 
       - name: ansible-lint
-        run: ansible-lint
+        run: uv run ansible-lint
 
       - name: Syntax check
-        run: ansible-playbook playbooks/site.yml --syntax-check
+        run: uv run ansible-playbook playbooks/site.yml --syntax-check
 
       - name: shellcheck
         run: shellcheck scripts/*.sh

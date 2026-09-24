@@ -3,4 +3,5 @@ profile: production
 exclude_paths:
   - collections/
   - .ansible/
+  - .venv/                     # created by uv sync
   - group_vars/all/vault.yml   # local, encrypted, not tracked

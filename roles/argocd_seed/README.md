@@ -40,6 +40,5 @@ in `AGENTS.md` §7.
 ## Usage
 
 ```bash
-ansible-playbook playbooks/30-gitops-seed.yml --ask-vault-pass   # hybrid routing
-ansible-playbook playbooks/30-gitops-seed.yml                    # local-only mode
+scripts/run-playbook.sh playbooks/30-gitops-seed.yml   # hybrid routing with a vault, local-only without
 ```

@@ -13,6 +13,9 @@
 # - vault and password file found: the password file is used;
 # - vault found, no password file: ansible-playbook asks for the password;
 # - no vault: the playbook runs in local-only mode (no SOTA model).
+#
+# With uv installed, ansible-playbook runs in the project environment (uv run --locked:
+# the versions of uv.lock). Without uv, the ansible-playbook found in PATH is used.
 set -euo pipefail
 
 if [[ $# -lt 1 ]]; then
@@ -56,4 +59,8 @@ fi
 # does not fail when it points to a missing file.
 unset ANSIBLE_VAULT_PASSWORD_FILE
 cd "${repo}"
+if command -v uv >/dev/null 2>&1; then
+  exec uv run --locked ansible-playbook "${args[@]}" "$@"
+fi
+echo "uv not found: using $(command -v ansible-playbook || echo 'ansible-playbook from PATH')" >&2
 exec ansible-playbook "${args[@]}" "$@"

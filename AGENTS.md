@@ -29,6 +29,8 @@ Target platform: **demo.redhat.com** (RHDP). The code must be structured so that
 ├── AGENTS.md
 ├── README.md
 ├── ansible.cfg
+├── pyproject.toml              # Python tools (ansible-core, kubernetes, linters), managed with uv
+├── uv.lock                     # exact versions of the Python tools (uv lock)
 ├── requirements.yml            # collections (kubernetes.core, community.general)
 ├── inventory/
 │   └── localhost.yml           # runs from a bastion/laptop against the cluster API, no SSH
@@ -175,13 +177,14 @@ the flag on operators that this repo installs itself (RHCL, RHOAI, NFD, GPU oper
 - **Logging**: every role starts with a `debug` line stating what it is about to do and the key variables (except secrets).
 - **OpenShift version target**: **4.22** (`ocp_min_version: "4.22"` in preflight; the preflight fails on anything else, since operator pins are validated only for 4.22).
 - Comments and commit messages in **English**.
+- **Python tools with uv**, never pip: add or change a dependency in `pyproject.toml`, run `uv lock`, commit both files.
 
 ## 5. How to run
 
 ```bash
-# prerequisites
-pip install -r requirements.txt          # ansible-core, kubernetes, openshift, ansible-lint
-ansible-galaxy collection install -r requirements.yml
+# prerequisites (uv: https://docs.astral.sh/uv/)
+uv sync                                  # .venv from pyproject.toml + uv.lock (ansible-core, kubernetes, linters)
+uv run ansible-galaxy collection install -r requirements.yml
 
 # authenticate against the target cluster (one of)
 export KUBECONFIG=~/.kube/demo.kubeconfig
@@ -192,18 +195,18 @@ oc login --token=... --server=https://api.<cluster>:6443
 scripts/run-playbook.sh playbooks/site.yml   # finds the vault password file; without a vault: local-only mode
 
 # single stage / operator
-ansible-playbook playbooks/10-operators.yml --tags rhoai
+scripts/run-playbook.sh playbooks/10-operators.yml --tags rhoai
 
 # dry run
-ansible-playbook playbooks/site.yml --check --diff
+scripts/run-playbook.sh playbooks/site.yml --check --diff
 ```
 
 Before opening a PR:
 
 ```bash
-ansible-lint
-yamllint .
-ansible-playbook playbooks/site.yml --syntax-check
+uv run ansible-lint
+uv run yamllint .
+uv run ansible-playbook playbooks/site.yml --syntax-check
 ```
 
 CI (GitHub Actions) runs `ansible-lint` + `yamllint` on every PR; a failing lint blocks the merge.

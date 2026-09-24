@@ -4,6 +4,7 @@ extends: default
 ignore: |
   collections/
   .ansible/
+  .venv/
   group_vars/all/vault.yml
 
 rules:
