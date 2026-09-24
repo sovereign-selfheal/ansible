@@ -40,12 +40,14 @@
     quiet: true
 
 - name: Report the routing mode
-  ansible.builtin.debug:
-    msg: >-
-      {{ 'Hybrid routing: local model + SOTA ' ~ argocd_seed_sota_model
+  vars:
+    argocd_seed_mode_msg: >-
+      {{ ('Hybrid routing: local model + SOTA ' ~ argocd_seed_sota_model
+          ~ ' (reasoning ' ~ ('on' if argocd_seed_sota_reasoning | bool else 'off') ~ ')')
          if argocd_seed_sota_enabled | bool
          else 'Local-only mode: no SOTA configured (group_vars/all/vault.yml), every request goes to the local model' }}
-      - classifier mode {{ argocd_seed_classifier_mode }}
+  ansible.builtin.debug:
+    msg: "{{ argocd_seed_mode_msg }} | classifier mode {{ argocd_seed_classifier_mode }}"
 
 - name: Read the cluster ingress configuration
   kubernetes.core.k8s_info:
@@ -62,7 +64,8 @@
           'sota': {'enabled': argocd_seed_sota_enabled | bool,
                    'apiBase': argocd_seed_sota_api_base,
                    'model': argocd_seed_sota_model,
-                   'servedMatch': argocd_seed_sota_served_match},
+                   'servedMatch': argocd_seed_sota_served_match,
+                   'reasoning': argocd_seed_sota_reasoning | bool},
           'secretStore': {'enabled': argocd_seed_secret_store_enabled | bool},
           'classifier': {'mode': argocd_seed_classifier_mode},
           'repo': {'url': argocd_seed_repo_url, 'targetRevision': argocd_seed_revision}}

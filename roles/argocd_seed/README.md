@@ -29,6 +29,7 @@ in `AGENTS.md` §7.
 | `argocd_seed_app_name` | `sovereign-selfheal` | Root Application name |
 | `argocd_seed_model_profile` | from `gpu_enabled` | `gpu` or `cpu` |
 | `argocd_seed_sota_api_base` / `_model` / `_served_match` | `sota_api_base`, `sota_model`, `sota_served_match` | External model of the router |
+| `argocd_seed_sota_reasoning` | `sota_reasoning` (`false`) | `false`: the SOTA model answers without reasoning |
 | `argocd_seed_secret_store_enabled` | `secret_store_enabled` (false) | True once the ClusterSecretStore exists |
 | `argocd_seed_classifier_mode` | `classifier_mode` (`local`) | `local`, `external` (needs the vault) or `off` |
 | `argocd_seed_extra_values` | `{}` | Other values of `bootstrap/values.yaml` |

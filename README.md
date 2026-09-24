@@ -68,6 +68,7 @@ variables as extra vars).
 | `sota_model` | LiteLLM model string, e.g. `openai/<model-id>` |
 | `sota_served_match` | Part of the served model id, used by the cost gate |
 | `sota_api_key` | API key (secret) |
+| `sota_reasoning` | `false` (default in `main.yml`): the SOTA model answers without reasoning; `true`: the model decides |
 
 - **Hybrid routing**: set all of `sota_api_base`, `sota_model`, `sota_api_key`. The key lands in the
   cluster through the External Secrets Operator ([`roles/secrets_bootstrap`](roles/secrets_bootstrap/README.md)).

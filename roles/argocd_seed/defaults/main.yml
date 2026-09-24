@@ -31,6 +31,7 @@ argocd_seed_sota_api_key_set: "{{ (sota_api_key | default('')) | length > 0 }}"
 argocd_seed_sota_api_base: "{{ sota_api_base | default('') }}"
 argocd_seed_sota_model: "{{ sota_model | default('') }}"
 argocd_seed_sota_served_match: "{{ sota_served_match | default('') }}"
+argocd_seed_sota_reasoning: "{{ sota_reasoning | default(false) }}"
 argocd_seed_secret_store_enabled: "{{ secret_store_enabled | default(false) }}"
 argocd_seed_classifier_mode: "{{ classifier_mode | default('local') }}"
 # Any other value of bootstrap/values.yaml, merged last (for example {tiers: [...]}).
