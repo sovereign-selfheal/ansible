@@ -42,7 +42,10 @@ gateway_class_controller: openshift.io/gateway-controller/v1   # OCP 4.20+ contr
 
 kuadrant_namespace: kuadrant-system
 authorino_tls_enabled: true
-authorino_replicas: 1
+# The gateway denies every request when Authorino does not answer (failureMode deny), so run 2
+# replicas. The Authorino CR has no affinity field: spreading on nodes is the scheduler default.
+# Limitador stays at 1 replica: its counters are in memory, and more replicas would split them.
+authorino_replicas: 2
 
 rhoai_dsc_name: default-dsc
 # DataScienceCluster v2 component states (RHOAI 3.5). Only what the demo needs is Managed.
