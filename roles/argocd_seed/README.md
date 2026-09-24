@@ -6,7 +6,8 @@ in `AGENTS.md` §7.
 
 ## What it does
 
-1. Checks that `sota_api_base` and `sota_model` are set.
+1. Decides the routing mode: **hybrid** when `sota_api_base`, `sota_model` and `sota_api_key` are all set,
+   **local-only** when none of them is set. Only some of them set stops the play.
 2. Creates the namespaces `local-models` and `maas-routing` with the label
    `argocd.argoproj.io/managed-by: openshift-gitops`. The default instance cannot create namespaces;
    with this label the GitOps operator gives it admin rights there.
@@ -14,8 +15,8 @@ in `AGENTS.md` §7.
    of apps wait for each component), `AuthPolicy` and `TokenRateLimitPolicy` (Healthy when
    `Enforced`). This replaces `spec.resourceHealthChecks` of the instance.
 4. Creates the root Application with these values: `appsDomain` (from the cluster), `modelProfile`
-   (`gpu` when `gpu_enabled`, else `cpu`), `sota.*`, `secretStore.enabled`, `repo.*`, plus
-   `argocd_seed_extra_values`.
+   (`gpu` when `gpu_enabled`, else `cpu`), `sota.*` (with `sota.enabled` = hybrid mode),
+   `secretStore.enabled`, `classifier.enabled`, `repo.*`, plus `argocd_seed_extra_values`.
 5. Waits until the root Application is `Synced` and `Healthy` (so every component is), then
    prints the state of every Application.
 
@@ -37,5 +38,6 @@ in `AGENTS.md` §7.
 ## Usage
 
 ```bash
-ansible-playbook playbooks/30-gitops-seed.yml -e sota_api_base=https://<provider>/v1 -e sota_model=openai/<model>
+ansible-playbook playbooks/30-gitops-seed.yml --ask-vault-pass   # hybrid routing
+ansible-playbook playbooks/30-gitops-seed.yml                    # local-only mode
 ```

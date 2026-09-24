@@ -1,0 +1,71 @@
+---
+- name: Select the source Secrets that have values
+  ansible.builtin.set_fact:
+    secrets_bootstrap_present: >-
+      {%- set acc = namespace(names=[]) -%}
+      {%- for name, data in secrets_bootstrap_secrets.items() -%}
+      {%- if data.values() | select | list | length > 0 -%}
+      {%- set acc.names = acc.names + [name] -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ acc.names }}
+  no_log: true
+
+- name: Land the secret values for the External Secrets Operator
+  ansible.builtin.debug:
+    msg: >-
+      Namespace {{ secrets_bootstrap_namespace }}, ClusterSecretStore {{ secrets_bootstrap_store_name }},
+      source Secrets with values: {{ secrets_bootstrap_present | default([]) }}
+      (values are never printed)
+
+- name: Nothing to land
+  ansible.builtin.debug:
+    msg: >-
+      sota_api_key is not set (group_vars/all/vault.yml or AgnosticV): no ClusterSecretStore.
+      The router runs without the SOTA key and sends every request to the local model.
+  when: (secrets_bootstrap_secrets.sota.api_key | default('')) | length == 0
+
+- name: Create the store and the source Secrets
+  when: (secrets_bootstrap_secrets.sota.api_key | default('')) | length > 0
+  block:
+    - name: Ensure the source namespace
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ secrets_bootstrap_namespace }}"
+
+    - name: Ensure the source Secrets
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Secret
+          type: Opaque
+          metadata:
+            name: "{{ secrets_bootstrap_item.key }}"
+            namespace: "{{ secrets_bootstrap_namespace }}"
+          stringData: "{{ secrets_bootstrap_item.value | dict2items | selectattr('value') | items2dict }}"
+      loop: "{{ secrets_bootstrap_secrets | dict2items }}"
+      loop_control:
+        loop_var: secrets_bootstrap_item
+        label: "{{ secrets_bootstrap_item.key }}"
+      when: secrets_bootstrap_item.value | dict2items | selectattr('value') | list | length > 0
+      no_log: true
+
+    - name: Ensure the ServiceAccount, its RBAC and the ClusterSecretStore
+      kubernetes.core.k8s:
+        state: present
+        definition: "{{ lookup('ansible.builtin.template', 'store.yaml.j2') | ansible.builtin.from_yaml_all | list }}"
+
+    - name: Wait for the ClusterSecretStore to be Ready
+      kubernetes.core.k8s_info:
+        api_version: external-secrets.io/v1
+        kind: ClusterSecretStore
+        name: "{{ secrets_bootstrap_store_name }}"
+        wait: true
+        wait_condition: {type: Ready, status: "True"}
+        wait_timeout: "{{ secrets_bootstrap_timeout }}"
+      when: not ansible_check_mode

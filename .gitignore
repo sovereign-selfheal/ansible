@@ -1,4 +1,6 @@
 # Credentials and cluster access: never commit
+# The vault stays on your machine (encrypted): see group_vars/all/vault.yml.example
+group_vars/all/vault.yml
 *.kubeconfig
 kubeconfig
 .kubeconfig*

@@ -1,0 +1,23 @@
+---
+# secrets_bootstrap: land the secret values in the cluster, once, for the External Secrets
+# Operator. Ansible writes them into Secrets of a dedicated namespace; a ClusterSecretStore
+# (provider "kubernetes") lets ESO read them; the ExternalSecrets of the gitops repo copy
+# them into the workload namespaces. The values come from ansible-vault (group_vars/all/vault.yml)
+# or from the extra vars of AgnosticV.
+
+secrets_bootstrap_namespace: sovereign-selfheal-secrets
+# Must match secretStore.name in the gitops repo (bootstrap/values.yaml).
+secrets_bootstrap_store_name: sovereign-selfheal
+secrets_bootstrap_service_account: eso-reader
+
+# Source Secrets: name -> {key: value}. The names and keys must match secretStore.* in
+# the gitops repo. Empty values are left out; a Secret with no values is not created.
+secrets_bootstrap_secrets:
+  sota:
+    api_key: "{{ sota_api_key | default('') }}"
+  classifier:
+    base_url: "{{ classifier_base_url | default('') }}"
+    model: "{{ classifier_model | default('') }}"
+    api_key: "{{ classifier_api_key | default('') }}"
+
+secrets_bootstrap_timeout: 300

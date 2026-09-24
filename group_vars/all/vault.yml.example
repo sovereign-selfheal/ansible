@@ -1,0 +1,22 @@
+---
+# Template of group_vars/all/vault.yml. That file is NOT tracked by git (.gitignore):
+# keep it on your machine, encrypted with ansible-vault.
+#
+#   cp group_vars/all/vault.yml.example group_vars/all/vault.yml
+#   ansible-vault encrypt group_vars/all/vault.yml     # choose a vault password
+#   ansible-vault edit group_vars/all/vault.yml        # set the values
+#   ansible-playbook playbooks/site.yml --ask-vault-pass
+#
+# On RHDP, AgnosticV passes the same variables as extra vars: no vault file is needed.
+
+# External "SOTA" model of the router (OpenAI compatible).
+sota_api_base: https://provider.example.com/v1
+sota_model: openai/example-model
+sota_served_match: example-model
+sota_api_key: sk-REPLACE_ME
+
+# Optional C2 classifier of the privacy gate.
+# classifier_enabled: true
+# classifier_base_url: https://provider.example.com/v1
+# classifier_model: example-classifier
+# classifier_api_key: sk-REPLACE_ME

@@ -8,7 +8,7 @@ Read [`AGENTS.md`](AGENTS.md) before changing anything.
 |---|---|---|
 | Preflight (reachability, OCP 4.22, default StorageClass, catalogs, external GPU nodes) | `playbooks/00-preflight.yml` | done |
 | Operators (OLM, pinned CSV, Manual approval) | `playbooks/10-operators.yml` | done |
-| Cluster prerequisites: inference Gateway and Route ([`roles/ingress_gateway`](roles/ingress_gateway/README.md)), GPU MachineSets ([`roles/gpu_node_prep`](roles/gpu_node_prep/README.md)) | `playbooks/20-prereqs.yml` | done |
+| Cluster prerequisites: inference Gateway and Route ([`roles/ingress_gateway`](roles/ingress_gateway/README.md)), secret values for ESO ([`roles/secrets_bootstrap`](roles/secrets_bootstrap/README.md)), GPU MachineSets ([`roles/gpu_node_prep`](roles/gpu_node_prep/README.md)) | `playbooks/20-prereqs.yml` | done |
 | GitOps seed: namespaces, Argo CD health checks, root Application ([`roles/argocd_seed`](roles/argocd_seed/README.md)) | `playbooks/30-gitops-seed.yml` | done |
 | Teardown | `playbooks/99-destroy.yml` | todo |
 
@@ -55,20 +55,50 @@ export KUBECONFIG=~/.kube/demo.kubeconfig
 # or: oc login --token=<token> --server=https://api.<cluster>:6443
 ```
 
+## SOTA model and ansible-vault
+
+The router sends each request to the **local model** or to an external **"SOTA" model**
+(OpenAI compatible). The SOTA settings are not in git: they come from `group_vars/all/vault.yml`,
+a file encrypted with ansible-vault that stays on your machine (on RHDP, AgnosticV passes the same
+variables as extra vars).
+
+| Variable | Meaning |
+|---|---|
+| `sota_api_base` | Endpoint, e.g. `https://<provider>/v1` |
+| `sota_model` | LiteLLM model string, e.g. `openai/<model-id>` |
+| `sota_served_match` | Part of the served model id, used by the cost gate |
+| `sota_api_key` | API key (secret) |
+
+- **Hybrid routing**: set all of `sota_api_base`, `sota_model`, `sota_api_key`. The key lands in the
+  cluster through the External Secrets Operator ([`roles/secrets_bootstrap`](roles/secrets_bootstrap/README.md)).
+- **Local-only mode**: set none of them (no vault file). Every request goes to the local model; the
+  router logs still show `routed_to: sota-smart` when a gate chooses "SOTA", but the local model serves it.
+- Only some of them set: the play stops with an error.
+
+Create the vault once:
+
+```bash
+cp group_vars/all/vault.yml.example group_vars/all/vault.yml
+ansible-vault encrypt group_vars/all/vault.yml
+ansible-vault edit group_vars/all/vault.yml
+```
+
+Then add `--ask-vault-pass` (or `--vault-password-file <file>`) to every `ansible-playbook` command.
+
 ## Run
 
 ```bash
 # dry run: shows diffs, skips approvals and waits
 ansible-playbook playbooks/site.yml --check --diff
 
-# full bootstrap: preflight, operators, prerequisites, GitOps seed.
-# The SOTA endpoint is not secret but stays out of tracked files: -e, or group_vars/all/vault.yml
-ansible-playbook playbooks/site.yml -e sota_api_base=https://<provider>/v1 -e sota_model=openai/<model>
+# full bootstrap: preflight, operators, prerequisites, GitOps seed
+ansible-playbook playbooks/site.yml --ask-vault-pass      # hybrid routing (vault with the SOTA settings)
+ansible-playbook playbooks/site.yml                        # local-only mode (no vault file)
 
 # a single operator
 ansible-playbook playbooks/10-operators.yml --tags rhoai
 
-# with GPU: operators first, then the GPU MachineSets (one run, in this order; SOTA values as above)
+# with GPU: operators first, then the GPU MachineSets (one run, in this order)
 ansible-playbook playbooks/site.yml -e gpu_enabled=true
 
 # end of the day: scale the GPU MachineSets to 0 (only stage 20, faster)

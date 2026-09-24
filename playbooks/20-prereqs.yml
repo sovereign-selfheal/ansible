@@ -1,6 +1,7 @@
 ---
 # Cluster prerequisites that GitOps cannot handle:
 # - the inference Gateway and its passthrough Route (roles/ingress_gateway);
+# - the secret values for the External Secrets Operator (roles/secrets_bootstrap);
 # - the GPU MachineSets, when gpu_enabled and gpu_nodes_managed (roles/gpu_node_prep).
 #   They run after 10-operators: the GPU wait needs the NVIDIA operator.
 # Scale every GPU MachineSet to 0:  -e gpu_enabled=true -e gpu_node_prep_replicas=0 --tags gpu_node_prep
@@ -13,6 +14,13 @@
         name: ingress_gateway
         apply:
           tags: [ingress_gateway]
+      tags: always
+
+    - name: Land the secret values for the External Secrets Operator
+      ansible.builtin.include_role:
+        name: secrets_bootstrap
+        apply:
+          tags: [secrets_bootstrap]
       tags: always
 
     - name: Create the GPU MachineSets

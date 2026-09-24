@@ -17,14 +17,20 @@ gpu_enabled: false
 #       preflight then fails if there are none.
 gpu_nodes_managed: true
 
-# ----- GitOps seed (roles/argocd_seed) -------------------------------------------
-# External "SOTA" model of the router (OpenAI compatible). Not secret, but kept out of
-# tracked files: set them in group_vars/all/vault.yml or with -e.
+# ----- SOTA model and secrets (roles/secrets_bootstrap, roles/argocd_seed) ----------
+# Set these in group_vars/all/vault.yml (ansible-vault, see vault.yml.example) or pass
+# them as extra vars (AgnosticV). The defaults below are empty on purpose.
 sota_api_base: ""        # e.g. https://<provider>/v1
 sota_model: ""           # LiteLLM model string, e.g. openai/<model-id>
 sota_served_match: ""    # part of the served model id, used by the cost gate
-# true once the ClusterSecretStore of the External Secrets Operator exists.
-secret_store_enabled: false
+sota_api_key: ""         # secret: lands in the cluster through the External Secrets Operator
+# Optional C2 classifier (LLM) of the privacy gate.
+classifier_enabled: false
+classifier_base_url: ""
+classifier_model: ""
+classifier_api_key: ""   # secret
+# The ClusterSecretStore exists when there is a SOTA key to land.
+secret_store_enabled: "{{ sota_api_key | length > 0 }}"
 
 # ----- Post-install CR settings (rendered by roles/olm_operator/templates) ----
 gateway_class_name: openshift-default

@@ -35,7 +35,8 @@ Target platform: **demo.redhat.com** (RHDP). The code must be structured so that
 ├── group_vars/
 │   └── all/
 │       ├── main.yml            # non-secret defaults
-│       └── vault.yml           # ansible-vault, never in clear text
+│       ├── vault.yml           # ansible-vault, never in clear text, NOT tracked by git
+│       └── vault.yml.example   # template of vault.yml
 ├── playbooks/
 │   ├── site.yml                # full bootstrap, calls the others in order
 │   ├── 00-preflight.yml        # cluster reachability, version, node/GPU checks
@@ -48,7 +49,7 @@ Target platform: **demo.redhat.com** (RHDP). The code must be structured so that
 │   ├── olm_operator/           # generic, reusable: one role, N operators via vars
 │   ├── gpu_node_prep/
 │   ├── ingress_gateway/        # RHOAI inference Gateway + passthrough Route (contract with gitops)
-│   ├── secrets_bootstrap/
+│   ├── secrets_bootstrap/      # secret values for ESO + ClusterSecretStore (provider kubernetes)
 │   └── argocd_seed/
 ├── scripts/
 │   └── resolve-operator-versions.sh   # prints package/channel/currentCSV on the target cluster
@@ -161,7 +162,7 @@ the flag on operators that this repo installs itself (RHCL, RHOAI, NFD, GPU oper
 
 - **Idempotency is mandatory.** Every playbook must be re-runnable with zero changes on the second run. Use `kubernetes.core.k8s` with `state: present` and `kubernetes.core.k8s_info` + `until` for waits. No `oc apply` via `shell` unless there is no module equivalent; if you must, add `changed_when`.
 - **No cluster-specific values in tasks.** Everything tunable goes to `group_vars/all/main.yml` or is passed with `-e`. Roles expose their variables in `defaults/main.yml`, documented in `README.md` of the role.
-- **Secrets**: workload secrets are managed by the External Secrets Operator (see §7). The only secret this repo handles is the credential of the `ClusterSecretStore`: it comes from `group_vars/all/vault.yml` (ansible-vault) or is injected at runtime with `-e`/env vars. Never commit clear-text tokens, kubeconfigs, API keys. `.gitignore` already excludes `*.kubeconfig`, `.vault-password`, `*.pem`.
+- **Secrets**: workload secrets are managed by the External Secrets Operator (see §7). This repo only lands their values in the cluster (`roles/secrets_bootstrap`); the values come from `group_vars/all/vault.yml` (ansible-vault, not tracked by git, template in `vault.yml.example`) or are injected at runtime with `-e`/env vars (AgnosticV). Never commit clear-text tokens, kubeconfigs, API keys. `.gitignore` already excludes `*.kubeconfig`, `.vault-password`, `*.pem`.
 - **Naming**: roles and variables in `snake_case`; playbooks prefixed with two digits for ordering; tags equal to the role name (`--tags rhoai`).
 - **Fully qualified collection names** (`kubernetes.core.k8s`, not `k8s`).
 - **Waits, not sleeps.** `pause` is forbidden; poll a condition.
@@ -182,7 +183,7 @@ export KUBECONFIG=~/.kube/demo.kubeconfig
 oc login --token=... --server=https://api.<cluster>:6443
 
 # full bootstrap
-ansible-playbook playbooks/site.yml -e @group_vars/all/vault.yml --ask-vault-pass
+ansible-playbook playbooks/site.yml --ask-vault-pass      # vault with the SOTA settings; without it: local-only mode
 
 # single stage / operator
 ansible-playbook playbooks/10-operators.yml --tags rhoai
@@ -218,18 +219,23 @@ The same contract is in `gitops/AGENTS.md` §2. Keep both in sync.
   `openshift-ai-inference` (+ its ConfigMap), the passthrough `Route/maas-router` in `openshift-ingress`
   (host `router.<apps domain>`, `haproxy.router.openshift.io/timeout: 180s`), Kuadrant + Authorino TLS,
   GPU nodes, the namespaces `local-models` and `maas-routing`, the External Secrets Operator, the
-  `ClusterSecretStore` and its credential Secret, the Argo CD settings, the root Application.
+  `ClusterSecretStore` and its source Secrets (namespace `sovereign-selfheal-secrets`), the Argo CD settings, the root Application.
   `gitops`: every object inside `local-models` and `maas-routing`.
 - **Namespaces** `local-models` and `maas-routing` carry `argocd.argoproj.io/managed-by: openshift-gitops`
   (the default Argo CD instance manages only labelled namespaces), and `local-models` also
   `opendatahub.io/dashboard: "true"` and `modelmesh-enabled: "false"`.
 - **Root Application** (`30-gitops-seed.yml`): path `bootstrap` of the gitops repo, with `helm.valuesObject`:
   `appsDomain` (from `ingresses.config/cluster`), `modelProfile` (`gpu` when `gpu_enabled`, else `cpu`),
-  `sota.apiBase`, `sota.model`, `sota.servedMatch`, and `secretStore.enabled` once the store exists.
+  `sota.enabled`, `sota.apiBase`, `sota.model`, `sota.servedMatch`, `secretStore.enabled`, `classifier.enabled`.
+- **SOTA model**: its settings and key come from `group_vars/all/vault.yml` (ansible-vault, not tracked) or
+  from AgnosticV. All three of `sota_api_base`, `sota_model`, `sota_api_key` = hybrid routing; none =
+  **local-only mode** (`sota.enabled: false`, every request goes to the local model); some = error.
 - **Argo CD health checks** on the ArgoCD CR: `argoproj.io/Application` (sync waves between components),
   `serving.kserve.io/InferenceService`, Kuadrant `AuthPolicy` and `TokenRateLimitPolicy`.
-- **Secrets** are managed by the External Secrets Operator, not by `vault.yml`. This repo creates only the
-  credential that the `ClusterSecretStore` needs to read the external store.
+- **Secrets** are managed by the External Secrets Operator. `roles/secrets_bootstrap` lands the values from
+  `vault.yml` (or AgnosticV) in Secrets of the namespace `sovereign-selfheal-secrets` and creates the
+  `ClusterSecretStore` `sovereign-selfheal` (provider `kubernetes`) that ESO reads. A different backend later
+  changes only that store.
 
 ## 8. Out of scope for this repo
 
