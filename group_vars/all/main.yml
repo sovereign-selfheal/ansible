@@ -32,6 +32,9 @@ rhoai_dsc_components:
   dashboard: {managementState: Managed}
   kserve:
     managementState: Managed
+    # Headed: the predictor Service gets a ClusterIP (port 80 -> 8080). The default,
+    # Headless, sends clients straight to the pod on port 80, where nothing listens.
+    rawDeploymentServiceConfig: Headed
     nim: {managementState: "{{ 'Managed' if gpu_enabled | bool else 'Removed' }}"}
     modelsAsService: {managementState: Removed}
     wva: {managementState: Removed}

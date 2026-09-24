@@ -2,8 +2,9 @@
 # DataScienceCluster for RHOAI 3.5 (API v2). Component states come from
 # rhoai_dsc_components in group_vars. Ported from rhocpai-mvp-routing
 # manifests/10-dsci-dsc/10-datasciencecluster.yaml; the RHOAI 3.4-only fields
-# (defaultDeploymentMode, serving, rawDeploymentServiceConfig) are dropped because the
-# 3.5 CRD prunes them. The DSCInitialization is auto-created by the operator.
+# (defaultDeploymentMode, serving) are dropped because the 3.5 CRD prunes them.
+# rawDeploymentServiceConfig still exists in 3.5.1 and is set in rhoai_dsc_components.
+# The DSCInitialization is auto-created by the operator.
 apiVersion: datasciencecluster.opendatahub.io/v2
 kind: DataScienceCluster
 metadata:
