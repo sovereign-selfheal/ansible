@@ -171,6 +171,48 @@ operators:
           namespace: "{{ kuadrant_namespace }}"
           condition: {type: Ready, status: "True"}
 
+  # 3b. RHCL dependencies. OLM creates their Subscriptions while it installs rhcl (Automatic,
+  #     named <package>-<channel>-<source>-<source namespace>). These entries adopt them:
+  #     Manual approval + pinned startingCSV, so they cannot upgrade on their own.
+  - key: authorino
+    name: authorino-operator
+    subscription_name: authorino-operator-stable-redhat-operators-openshift-marketplace
+    namespace: openshift-operators
+    manage_namespace: false
+    channel: stable
+    starting_csv: authorino-operator.v1.4.3       # resolved on OCP 4.22.14 on 2026-09-23
+    source: redhat-operators
+    source_namespace: openshift-marketplace
+    install_plan_approval: Manual
+    create_operator_group: false
+    enabled: true
+
+  - key: limitador
+    name: limitador-operator
+    subscription_name: limitador-operator-stable-redhat-operators-openshift-marketplace
+    namespace: openshift-operators
+    manage_namespace: false
+    channel: stable
+    starting_csv: limitador-operator.v1.4.2       # resolved on OCP 4.22.14 on 2026-09-23
+    source: redhat-operators
+    source_namespace: openshift-marketplace
+    install_plan_approval: Manual
+    create_operator_group: false
+    enabled: true
+
+  - key: dns_operator
+    name: dns-operator
+    subscription_name: dns-operator-stable-redhat-operators-openshift-marketplace
+    namespace: openshift-operators
+    manage_namespace: false
+    channel: stable
+    starting_csv: dns-operator.v1.4.2             # resolved on OCP 4.22.14 on 2026-09-23
+    source: redhat-operators
+    source_namespace: openshift-marketplace
+    install_plan_approval: Manual
+    create_operator_group: false
+    enabled: true
+
   # 4. Red Hat OpenShift AI 3.5 + DataScienceCluster (KServe RawDeployment).
   - key: rhoai
     name: rhods-operator

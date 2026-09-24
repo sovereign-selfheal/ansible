@@ -76,6 +76,25 @@ post_install:
 `template` is optional: an item with only `wait_exists` is a pure wait (used after the GatewayClass
 to wait for the Istio `wasmplugins.extensions.istio.io` CRD).
 
+### Adopting a Subscription created by someone else
+
+Set `subscription_name` to the existing name. Example: OLM creates the Subscriptions of the RHCL
+dependencies with the name `<package>-<channel>-<source>-<source namespace>`:
+
+```yaml
+- key: authorino
+  name: authorino-operator
+  subscription_name: authorino-operator-stable-redhat-operators-openshift-marketplace
+  namespace: openshift-operators
+  manage_namespace: false
+  create_operator_group: false
+  channel: stable
+  starting_csv: authorino-operator.v1.4.3
+  enabled: true
+```
+
+The role finds the CSV already `Succeeded` and only sets Manual approval and startingCSV.
+
 Templates only see the item's `vars`, so they contain no cluster-specific values.
 
 | Template | Resource | Readiness |
