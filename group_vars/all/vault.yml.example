@@ -15,8 +15,9 @@ sota_model: openai/example-model
 sota_served_match: example-model
 sota_api_key: sk-REPLACE_ME
 
-# Optional C2 classifier of the privacy gate.
-# classifier_enabled: true
+# C2 classifier of the privacy gate. The default (classifier_mode: local in main.yml) uses
+# the local model and needs nothing here. For an external classifier:
+# classifier_mode: external
 # classifier_base_url: https://provider.example.com/v1
 # classifier_model: example-classifier
 # classifier_api_key: sk-REPLACE_ME

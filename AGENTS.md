@@ -227,7 +227,8 @@ The same contract is in `gitops/AGENTS.md` §2. Keep both in sync.
   `opendatahub.io/dashboard: "true"` and `modelmesh-enabled: "false"`.
 - **Root Application** (`30-gitops-seed.yml`): path `bootstrap` of the gitops repo, with `helm.valuesObject`:
   `appsDomain` (from `ingresses.config/cluster`), `modelProfile` (`gpu` when `gpu_enabled`, else `cpu`),
-  `sota.enabled`, `sota.apiBase`, `sota.model`, `sota.servedMatch`, `secretStore.enabled`, `classifier.enabled`.
+  `sota.enabled`, `sota.apiBase`, `sota.model`, `sota.servedMatch`, `secretStore.enabled`, `classifier.mode`
+  (`classifier_mode`: `local` = the local model classifies, default; `external`; `off`).
 - **SOTA model**: its settings and key come from `group_vars/all/vault.yml` (ansible-vault, not tracked) or
   from AgnosticV. All three of `sota_api_base`, `sota_model`, `sota_api_key` = hybrid routing; none =
   **local-only mode** (`sota.enabled: false`, every request goes to the local model); some = error.

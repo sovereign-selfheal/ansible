@@ -4,6 +4,7 @@ extends: default
 ignore: |
   collections/
   .ansible/
+  group_vars/all/vault.yml
 
 rules:
   line-length:

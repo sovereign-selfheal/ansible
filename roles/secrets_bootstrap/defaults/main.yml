@@ -15,9 +15,10 @@ secrets_bootstrap_service_account: eso-reader
 secrets_bootstrap_secrets:
   sota:
     api_key: "{{ sota_api_key | default('') }}"
+  # Only used with classifier_mode: external.
   classifier:
-    base_url: "{{ classifier_base_url | default('') }}"
-    model: "{{ classifier_model | default('') }}"
-    api_key: "{{ classifier_api_key | default('') }}"
+    base_url: "{{ classifier_base_url | default('') if (classifier_mode | default('local')) == 'external' else '' }}"
+    model: "{{ classifier_model | default('') if (classifier_mode | default('local')) == 'external' else '' }}"
+    api_key: "{{ classifier_api_key | default('') if (classifier_mode | default('local')) == 'external' else '' }}"
 
 secrets_bootstrap_timeout: 300

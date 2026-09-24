@@ -24,12 +24,28 @@
       api_key={{ argocd_seed_sota_api_key_set | bool }}.
   when: argocd_seed_sota_partial | bool
 
+- name: Check the classifier mode
+  ansible.builtin.assert:
+    that:
+      - argocd_seed_classifier_mode in ['local', 'external', 'off']
+      - >-
+        argocd_seed_classifier_mode != 'external'
+        or ((argocd_seed_secret_store_enabled | bool)
+            and (classifier_base_url | default('') | length > 0)
+            and (classifier_model | default('') | length > 0))
+    fail_msg: >-
+      classifier_mode must be local, external or off (got {{ argocd_seed_classifier_mode }}).
+      external needs the secret store and classifier_base_url, classifier_model (and usually
+      classifier_api_key) in group_vars/all/vault.yml.
+    quiet: true
+
 - name: Report the routing mode
   ansible.builtin.debug:
     msg: >-
       {{ 'Hybrid routing: local model + SOTA ' ~ argocd_seed_sota_model
          if argocd_seed_sota_enabled | bool
          else 'Local-only mode: no SOTA configured (group_vars/all/vault.yml), every request goes to the local model' }}
+      - classifier mode {{ argocd_seed_classifier_mode }}
 
 - name: Read the cluster ingress configuration
   kubernetes.core.k8s_info:
@@ -48,7 +64,7 @@
                    'model': argocd_seed_sota_model,
                    'servedMatch': argocd_seed_sota_served_match},
           'secretStore': {'enabled': argocd_seed_secret_store_enabled | bool},
-          'classifier': {'enabled': (argocd_seed_classifier_enabled | bool) and (argocd_seed_secret_store_enabled | bool)},
+          'classifier': {'mode': argocd_seed_classifier_mode},
           'repo': {'url': argocd_seed_repo_url, 'targetRevision': argocd_seed_revision}}
          | combine(argocd_seed_extra_values, recursive=true) }}
 

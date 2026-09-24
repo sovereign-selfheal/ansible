@@ -74,6 +74,9 @@ variables as extra vars).
 - **Local-only mode**: set none of them (no vault file). Every request goes to the local model; the
   router logs still show `routed_to: sota-smart` when a gate chooses "SOTA", but the local model serves it.
 - Only some of them set: the play stops with an error.
+- **Privacy classifier**: `classifier_mode` (`group_vars/all/main.yml`) is `local` by default: the local
+  model classifies the gray-zone prompts, so they never leave the cluster. `external` uses a classifier
+  set in the vault (`classifier_base_url`, `classifier_model`, `classifier_api_key`); `off` turns it off.
 
 Create the vault once:
 

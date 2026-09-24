@@ -20,7 +20,7 @@ local-only mode (see the repo README).
 |---|---|
 | Namespace `sovereign-selfheal-secrets` | Holds the source Secrets. Not managed by Argo CD |
 | Secret `sota` | Key `api_key` = `sota_api_key` |
-| Secret `classifier` (optional) | Keys `base_url`, `model`, `api_key` = `classifier_*` |
+| Secret `classifier` (only `classifier_mode: external`) | Keys `base_url`, `model`, `api_key` = `classifier_*` |
 | ServiceAccount `eso-reader` + Role + RoleBinding | ESO reads Secrets only in this namespace |
 | ClusterSecretStore `sovereign-selfheal` | Provider `kubernetes`, waits for `Ready` |
 
