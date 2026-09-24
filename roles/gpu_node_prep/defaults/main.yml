@@ -20,6 +20,14 @@ gpu_node_prep_taints:
 
 # Wait for machines to be Running (or gone, when scaling down).
 gpu_node_prep_timeout: 1500
+# Then wait until every GPU node exposes nvidia.com/gpu (NVIDIA driver built and device
+# plugin running). Needs the GPU operator, installed by 10-operators before this role.
+gpu_node_prep_wait_gpu_allocatable: true
+gpu_node_prep_gpu_timeout: 1500
+# Finally wait until the NVIDIA ClusterPolicy is `ready` again: after a new node joins, the
+# metrics components (dcgm, dcgm-exporter) need about a minute more than the GPU itself.
+gpu_node_prep_wait_cluster_policy: true
+gpu_node_prep_cluster_policy_name: "{{ gpu_cluster_policy_name | default('gpu-cluster-policy') }}"
 gpu_node_prep_poll_delay: 15
 
 gpu_node_prep_machine_api_namespace: openshift-machine-api

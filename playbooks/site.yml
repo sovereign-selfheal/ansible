@@ -1,13 +1,13 @@
 ---
-# Full bootstrap, in order. Stages 20 (prereqs) and 30 (gitops seed) are not implemented yet.
+# Full bootstrap, in order. Stage 30 (gitops seed) is not implemented yet.
 - name: Preflight
   ansible.builtin.import_playbook: 00-preflight.yml
 
 - name: Operators
   ansible.builtin.import_playbook: 10-operators.yml
 
-# - name: Cluster prerequisites
-#   ansible.builtin.import_playbook: 20-prereqs.yml
-#
+- name: Cluster prerequisites
+  ansible.builtin.import_playbook: 20-prereqs.yml
+
 # - name: Seed the Argo CD Application
 #   ansible.builtin.import_playbook: 30-gitops-seed.yml

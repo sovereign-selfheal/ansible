@@ -175,3 +175,43 @@
         wait_condition: {type: Ready, status: "True"}
         wait_timeout: 600
       when: gpu_node_prep_expected | int > 0
+
+    - name: Wait until every GPU node exposes nvidia.com/gpu
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Node
+        label_selectors:
+          - "{{ gpu_node_prep_node_labels.keys() | first }}"
+      register: gpu_node_prep_gpu_nodes
+      vars:
+        gpu_node_prep_with_gpu: >-
+          {%- set acc = namespace(n=0) -%}
+          {%- for node in gpu_node_prep_gpu_nodes.resources | default([]) -%}
+          {%- if (node.status.allocatable | default({}))['nvidia.com/gpu'] | default('0') | int >= 1 -%}
+          {%- set acc.n = acc.n + 1 -%}
+          {%- endif -%}
+          {%- endfor -%}
+          {{ acc.n }}
+      until:
+        - gpu_node_prep_gpu_nodes.resources | length == gpu_node_prep_expected | int
+        - gpu_node_prep_with_gpu | int == gpu_node_prep_expected | int
+      retries: "{{ ((gpu_node_prep_gpu_timeout | int) / (gpu_node_prep_poll_delay | int)) | round(0, 'ceil') | int }}"
+      delay: "{{ gpu_node_prep_poll_delay }}"
+      when:
+        - gpu_node_prep_expected | int > 0
+        - gpu_node_prep_wait_gpu_allocatable | bool
+
+    - name: Wait until the NVIDIA ClusterPolicy is ready
+      kubernetes.core.k8s_info:
+        api_version: nvidia.com/v1
+        kind: ClusterPolicy
+        name: "{{ gpu_node_prep_cluster_policy_name }}"
+      register: gpu_node_prep_cluster_policy
+      until:
+        - gpu_node_prep_cluster_policy.resources | length == 1
+        - (gpu_node_prep_cluster_policy.resources | first).status.state | default('') == 'ready'
+      retries: "{{ ((gpu_node_prep_gpu_timeout | int) / (gpu_node_prep_poll_delay | int)) | round(0, 'ceil') | int }}"
+      delay: "{{ gpu_node_prep_poll_delay }}"
+      when:
+        - gpu_node_prep_expected | int > 0
+        - gpu_node_prep_wait_cluster_policy | bool

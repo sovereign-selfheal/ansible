@@ -4,7 +4,7 @@
     msg: >-
       Checking cluster reachability, OpenShift {{ ocp_preflight_required_version }}.x,
       default StorageClass={{ ocp_preflight_require_default_storageclass }},
-      catalogs={{ ocp_preflight_catalog_sources }}, gpu_enabled={{ ocp_preflight_gpu_enabled }}
+      catalogs={{ ocp_preflight_catalog_sources }}, gpu_nodes_required={{ ocp_preflight_gpu_nodes_required }}
 
 - name: Read the ClusterVersion (cluster reachable and authenticated)
   kubernetes.core.k8s_info:
@@ -72,7 +72,7 @@
     success_msg: "CatalogSources READY: {{ ocp_preflight_catalog_sources }}"
 
 - name: GPU node check
-  when: ocp_preflight_gpu_enabled | bool
+  when: ocp_preflight_gpu_nodes_required | bool
   block:
     - name: Read nodes
       kubernetes.core.k8s_info:
@@ -98,7 +98,7 @@
         that:
           - ocp_preflight_gpu_nodes | length >= ocp_preflight_gpu_min_nodes | int
         fail_msg: >-
-          gpu_enabled is true but fewer than {{ ocp_preflight_gpu_min_nodes }} GPU node(s) found
+          GPU nodes are required (gpu_enabled, gpu_nodes_managed false) but fewer than {{ ocp_preflight_gpu_min_nodes }} GPU node(s) found
           (label {{ ocp_preflight_gpu_node_label_selector }} or instance type matching
           {{ ocp_preflight_gpu_instance_type_regex }}). Add a GPU MachineSet first.
         success_msg: "GPU nodes: {{ ocp_preflight_gpu_nodes | join(', ') }}"

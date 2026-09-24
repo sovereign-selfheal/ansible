@@ -6,9 +6,9 @@ Read [`AGENTS.md`](AGENTS.md) before changing anything.
 
 | Stage | Playbook | Status |
 |---|---|---|
-| Preflight (reachability, OCP 4.22, default StorageClass, catalogs, GPU nodes) | `playbooks/00-preflight.yml` | done |
+| Preflight (reachability, OCP 4.22, default StorageClass, catalogs, external GPU nodes) | `playbooks/00-preflight.yml` | done |
 | Operators (OLM, pinned CSV, Manual approval) | `playbooks/10-operators.yml` | done |
-| Cluster prerequisites: GPU MachineSets ([`roles/gpu_node_prep`](roles/gpu_node_prep/README.md)) | `playbooks/20-prereqs.yml` | GPU part done; secrets todo |
+| Cluster prerequisites: GPU MachineSets ([`roles/gpu_node_prep`](roles/gpu_node_prep/README.md)), after the operators | `playbooks/20-prereqs.yml` | GPU part done; secrets todo |
 | Argo CD seed | `playbooks/30-gitops-seed.yml` | todo |
 | Teardown | `playbooks/99-destroy.yml` | todo |
 
@@ -66,11 +66,10 @@ ansible-playbook playbooks/site.yml
 # a single operator
 ansible-playbook playbooks/10-operators.yml --tags rhoai
 
-# with GPU: first create the GPU nodes, then install (preflight checks the GPU nodes)
-ansible-playbook playbooks/20-prereqs.yml -e gpu_enabled=true
+# with GPU: operators first, then the GPU MachineSets (one run, in this order)
 ansible-playbook playbooks/site.yml -e gpu_enabled=true
 
-# end of the day: scale the GPU MachineSets to 0
+# end of the day: scale the GPU MachineSets to 0 (only stage 20, faster)
 ansible-playbook playbooks/20-prereqs.yml -e gpu_enabled=true -e gpu_node_prep_replicas=0
 ```
 

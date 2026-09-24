@@ -29,7 +29,7 @@ Target platform: **demo.redhat.com** (RHDP). The code must be structured so that
 ├── AGENTS.md
 ├── README.md
 ├── ansible.cfg
-├── requirements.yml            # collections (kubernetes.core, redhat.openshift, community.general)
+├── requirements.yml            # collections (kubernetes.core, community.general)
 ├── inventory/
 │   └── localhost.yml           # runs from a bastion/laptop against the cluster API, no SSH
 ├── group_vars/
@@ -40,7 +40,7 @@ Target platform: **demo.redhat.com** (RHDP). The code must be structured so that
 │   ├── site.yml                # full bootstrap, calls the others in order
 │   ├── 00-preflight.yml        # cluster reachability, version, node/GPU checks
 │   ├── 10-operators.yml        # OLM subscriptions
-│   ├── 20-prereqs.yml          # GPU, secrets, namespaces owned by Ansible
+│   ├── 20-prereqs.yml          # GPU MachineSets (after the operators), secrets, namespaces owned by Ansible
 │   ├── 30-gitops-seed.yml      # Argo CD Application → gitops repo
 │   └── 99-destroy.yml          # optional teardown, symmetric to site.yml
 ├── roles/
@@ -79,7 +79,7 @@ oc get packagemanifests -n openshift-marketplace <package> \
 | `rhcl` | Red Hat Connectivity Link (Kuadrant) | `rhcl-operator` | `openshift-operators` | `stable` (only channel) | Before RHOAI. Brings `authorino-operator`, `limitador-operator`, `dns-operator` as OLM dependencies (pinned in `expected_dependency_csvs`). Post-install: GatewayClass, `Kuadrant` in `kuadrant-system`, Authorino TLS. The LLM gateway and its policies are deployed by GitOps |
 | `authorino` / `limitador` / `dns_operator` | RHCL dependencies | `authorino-operator` / `limitador-operator` / `dns-operator` | `openshift-operators` | `stable` | OLM creates their Subscriptions while it installs `rhcl` (Automatic). These entries adopt them by name (`subscription_name`) and set Manual approval + pinned startingCSV |
 | `rhoai` | Red Hat OpenShift AI | `rhods-operator` | `redhat-ods-operator` | `stable-3.5` | Creates `DataScienceCluster` (v2) with KServe; model serving (vLLM) itself is deployed by GitOps |
-| `nfd` | Node Feature Discovery | `nfd` | `openshift-nfd` | `stable` (only channel, tracks the OCP minor) | Only when `gpu_enabled: true`; required by the GPU operator. OwnNamespace OperatorGroup |
+| `nfd` | Node Feature Discovery | `nfd` | `openshift-nfd` | `stable` (only channel, tracks the OCP minor) | Only when `gpu_enabled: true`; required by the GPU operator. OwnNamespace OperatorGroup. Installed before the GPU nodes exist (see §3 "GPU nodes") |
 | `gpu_operator` | NVIDIA GPU Operator | `gpu-operator-certified` (catalog `certified-operators`) | `nvidia-gpu-operator` | `v26.7` | Only when `gpu_enabled: true`; needed by in-cluster vLLM. OwnNamespace OperatorGroup |
 | `servicemesh` / `serverless` | OSSM / OpenShift Serverless | `servicemeshoperator3` / `serverless-operator` | `openshift-operators` / `openshift-serverless` | `stable-3.4` / `stable-1.37` | Disabled: RHOAI 3.5 KServe is RawDeployment-only and needs neither |
 
@@ -134,6 +134,13 @@ The `olm_operator` role must, for every entry:
 6. Apply `post_install` CRs and wait for their readiness condition.
 
 On re-runs the role must detect that the pinned CSV is already `Succeeded` and skip steps 4–5 without changes (idempotent); step 3 is re-applied but is a no-op unless the Subscription drifted (this is also how pre-existing RHDP Subscriptions are adopted). Pending InstallPlans for newer versions, if OLM creates them, are left unapproved and reported in a final `debug` summary.
+
+**GPU nodes (`gpu_nodes_managed`).** The operators are installed first (stage 10), then the GPU
+MachineSets (stage 20, `roles/gpu_node_prep`). This order works because the NVIDIA `ClusterPolicy`
+is `ready` also when the cluster has no GPU nodes (verified on OCP 4.22.14 with GPU operator v26.7.0).
+Stage 20 then waits until each GPU node exposes `nvidia.com/gpu`. With `gpu_nodes_managed: false`
+the GPU nodes come from outside (for example an RHDP catalog item with GPUs): stage 20 does not
+create them and the preflight fails if there are none.
 
 **Operators pre-installed by the platform (`allow_newer_installed`).** RHDP clusters already have some
 operators (today: OpenShift GitOps and cert-manager) installed from the default channel, often `latest`,

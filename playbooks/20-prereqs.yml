@@ -1,5 +1,6 @@
 ---
-# Cluster prerequisites that GitOps cannot handle. For now: GPU MachineSets (when gpu_enabled).
+# Cluster prerequisites that GitOps cannot handle. For now: GPU MachineSets, when gpu_enabled
+# and gpu_nodes_managed. Runs after 10-operators: the GPU wait needs the NVIDIA operator.
 # Scale every GPU MachineSet to 0:  -e gpu_enabled=true -e gpu_node_prep_replicas=0
 - name: Cluster prerequisites
   hosts: localhost
@@ -10,5 +11,7 @@
         name: gpu_node_prep
         apply:
           tags: [gpu_node_prep]
-      when: gpu_enabled | bool
+      when:
+        - gpu_enabled | bool
+        - gpu_nodes_managed | bool
       tags: always

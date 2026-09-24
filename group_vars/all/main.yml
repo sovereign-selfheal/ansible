@@ -9,8 +9,13 @@
 ocp_min_version: "4.22"
 
 # ----- GPU --------------------------------------------------------------------
-# Enables NFD + NVIDIA GPU operator (and their CRs) and the preflight GPU node check.
+# Enables NFD + NVIDIA GPU operator (and their CRs) and the GPU nodes.
 gpu_enabled: false
+# true: this repo creates the GPU nodes (roles/gpu_node_prep, playbooks/20-prereqs.yml),
+#       after the operators. The ClusterPolicy is Ready also with zero GPU nodes.
+# false: the GPU nodes come from outside (e.g. an RHDP catalog item with GPUs);
+#       preflight then fails if there are none.
+gpu_nodes_managed: true
 
 # ----- Post-install CR settings (rendered by roles/olm_operator/templates) ----
 gateway_class_name: openshift-default
