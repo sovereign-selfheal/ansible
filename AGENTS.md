@@ -218,7 +218,8 @@ The same contract is in `gitops/AGENTS.md` §2. Keep both in sync.
 
 - **Ownership. No object is created by both repos.** This repo: operators, DSC, GatewayClass, Gateway
   `openshift-ai-inference` (+ its ConfigMap), the passthrough `Route/maas-router` in `openshift-ingress`
-  (host `router.<apps domain>`, `haproxy.router.openshift.io/timeout: 180s`), Kuadrant + Authorino TLS,
+  (host `router.<apps domain>`, `haproxy.router.openshift.io/timeout: 10m`), the idle timeout of the
+  ingress AWS load balancer (10m), Kuadrant + Authorino TLS,
   GPU nodes, the namespaces `local-models` and `maas-routing`, the External Secrets Operator, the
   `ClusterSecretStore` and its source Secrets (namespace `sovereign-selfheal-secrets`), the Argo CD settings, the root Application.
   `gitops`: every object inside `local-models` and `maas-routing`.

@@ -20,7 +20,6 @@
     name: default
     namespace: openshift-ingress-operator
   register: ingress_gateway_ingresscontroller
-  when: ingress_gateway_cert_secret | length == 0
 
 - name: Resolve the apps domain and the certificate Secret
   ansible.builtin.set_fact:
@@ -58,3 +57,34 @@
   kubernetes.core.k8s:
     state: present
     definition: "{{ lookup('ansible.builtin.template', 'route.yaml.j2') | ansible.builtin.from_yaml }}"
+
+# The spec repeats the current publishing strategy (from the status) and changes only the
+# idle timeout: the operator then updates the load balancer in place, without recreating it.
+- name: Set the idle timeout of the AWS Classic load balancer
+  vars:
+    ingress_gateway_eps: "{{ (ingress_gateway_ingresscontroller.resources | first).status.endpointPublishingStrategy | default({}) }}"
+  kubernetes.core.k8s:
+    state: patched
+    api_version: operator.openshift.io/v1
+    kind: IngressController
+    name: default
+    namespace: openshift-ingress-operator
+    merge_type: merge
+    definition:
+      spec:
+        endpointPublishingStrategy: >-
+          {{ ingress_gateway_eps | combine({'loadBalancer': {'providerParameters': {'aws':
+             {'classicLoadBalancer': {'connectionIdleTimeout': ingress_gateway_lb_idle_timeout}}}}}, recursive=true) }}
+  when:
+    - ingress_gateway_lb_idle_timeout | length > 0
+    - ingress_gateway_eps.type | default('') == 'LoadBalancerService'
+    - ingress_gateway_eps.loadBalancer.providerParameters.aws.type | default('') == 'Classic'
+
+- name: Report the load balancer idle timeout
+  vars:
+    ingress_gateway_eps: "{{ (ingress_gateway_ingresscontroller.resources | first).status.endpointPublishingStrategy | default({}) }}"
+  ansible.builtin.debug:
+    msg: >-
+      {{ 'Load balancer idle timeout set to ' ~ ingress_gateway_lb_idle_timeout
+         if (ingress_gateway_eps.loadBalancer.providerParameters.aws.type | default('')) == 'Classic'
+         else 'No AWS Classic load balancer: idle timeout left unchanged' }}

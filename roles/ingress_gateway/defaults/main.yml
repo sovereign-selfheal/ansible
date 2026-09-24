@@ -8,8 +8,13 @@ ingress_gateway_class: "{{ gateway_class_name | default('openshift-default') }}"
 # Public hostname: <host_prefix>.<apps domain>. Must match the HTTPRoute in the gitops repo.
 ingress_gateway_host_prefix: router
 ingress_gateway_route_name: maas-router
-# Router timeout: first tokens of a local model on CPU can take more than the default 30s.
-ingress_gateway_route_timeout: 180s
+# Router timeout. LLM answers without streaming can take minutes (a SOTA model with
+# reasoning and a large token budget: about 3 minutes).
+ingress_gateway_route_timeout: 10m
+# Idle timeout of the AWS Classic load balancer of the default IngressController. The AWS
+# default is 60s: without streaming no byte flows until the answer is complete, so longer
+# answers were cut at 60s. Applied only on AWS with a Classic load balancer; empty = no change.
+ingress_gateway_lb_idle_timeout: 10m
 
 # Empty: read from the cluster (ingresses.config/cluster and the default IngressController).
 ingress_gateway_apps_domain: ""
