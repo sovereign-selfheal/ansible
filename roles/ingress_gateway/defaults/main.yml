@@ -1,0 +1,20 @@
+---
+# ingress_gateway: the RHOAI inference Gateway and the public passthrough Route in front of it.
+# The HTTPRoute, AuthPolicy and TokenRateLimitPolicy that attach to it are in the gitops repo.
+
+ingress_gateway_name: openshift-ai-inference
+ingress_gateway_namespace: openshift-ingress
+ingress_gateway_class: "{{ gateway_class_name | default('openshift-default') }}"
+# Public hostname: <host_prefix>.<apps domain>. Must match the HTTPRoute in the gitops repo.
+ingress_gateway_host_prefix: router
+ingress_gateway_route_name: maas-router
+# Router timeout: first tokens of a local model on CPU can take more than the default 30s.
+ingress_gateway_route_timeout: 180s
+
+# Empty: read from the cluster (ingresses.config/cluster and the default IngressController).
+ingress_gateway_apps_domain: ""
+ingress_gateway_cert_secret: ""
+# Used when the default IngressController has no custom certificate.
+ingress_gateway_fallback_cert_secret: router-certs-default
+
+ingress_gateway_timeout: 600

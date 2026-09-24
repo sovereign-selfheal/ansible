@@ -1,11 +1,20 @@
 ---
-# Cluster prerequisites that GitOps cannot handle. For now: GPU MachineSets, when gpu_enabled
-# and gpu_nodes_managed. Runs after 10-operators: the GPU wait needs the NVIDIA operator.
-# Scale every GPU MachineSet to 0:  -e gpu_enabled=true -e gpu_node_prep_replicas=0
+# Cluster prerequisites that GitOps cannot handle:
+# - the inference Gateway and its passthrough Route (roles/ingress_gateway);
+# - the GPU MachineSets, when gpu_enabled and gpu_nodes_managed (roles/gpu_node_prep).
+#   They run after 10-operators: the GPU wait needs the NVIDIA operator.
+# Scale every GPU MachineSet to 0:  -e gpu_enabled=true -e gpu_node_prep_replicas=0 --tags gpu_node_prep
 - name: Cluster prerequisites
   hosts: localhost
   gather_facts: false
   tasks:
+    - name: Create the inference Gateway and its Route
+      ansible.builtin.include_role:
+        name: ingress_gateway
+        apply:
+          tags: [ingress_gateway]
+      tags: always
+
     - name: Create the GPU MachineSets
       ansible.builtin.include_role:
         name: gpu_node_prep

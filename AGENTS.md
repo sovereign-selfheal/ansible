@@ -47,6 +47,7 @@ Target platform: **demo.redhat.com** (RHDP). The code must be structured so that
 │   ├── ocp_preflight/
 │   ├── olm_operator/           # generic, reusable: one role, N operators via vars
 │   ├── gpu_node_prep/
+│   ├── ingress_gateway/        # RHOAI inference Gateway + passthrough Route (contract with gitops)
 │   ├── secrets_bootstrap/
 │   └── argocd_seed/
 ├── scripts/

@@ -1,0 +1,39 @@
+---
+# The Gateway Service is ClusterIP: traffic enters through the passthrough Route
+# below, so the existing *.apps DNS and certificate are reused on every platform.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ ingress_gateway_name }}-config
+  namespace: {{ ingress_gateway_namespace }}
+data:
+  service: |
+    spec:
+      type: ClusterIP
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ ingress_gateway_name }}
+  namespace: {{ ingress_gateway_namespace }}
+spec:
+  gatewayClassName: {{ ingress_gateway_class }}
+  infrastructure:
+    parametersRef:
+      group: ""
+      kind: ConfigMap
+      name: {{ ingress_gateway_name }}-config
+  listeners:
+    - name: https
+      protocol: HTTPS
+      port: 443
+      hostname: "*.{{ ingress_gateway_domain }}"
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            group: ""
+            name: {{ ingress_gateway_cert }}
+      allowedRoutes:
+        namespaces:
+          from: All

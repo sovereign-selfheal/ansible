@@ -1,0 +1,51 @@
+---
+# argocd_seed: prepare the default Argo CD instance and create the ROOT Application that
+# points to the gitops repo. From then on Argo CD owns every workload (see AGENTS.md §7).
+
+argocd_seed_namespace: openshift-gitops
+argocd_seed_argocd_name: openshift-gitops
+
+# Root Application: path `bootstrap` of the gitops repo (a Helm chart).
+argocd_seed_app_name: sovereign-selfheal
+argocd_seed_repo_url: https://github.com/sovereign-selfheal/gitops.git
+argocd_seed_revision: main
+argocd_seed_path: bootstrap
+
+# Workload namespaces, created here because the default Argo CD instance cannot create
+# namespaces. The managed-by label gives that instance admin rights in them.
+argocd_seed_namespaces:
+  - name: local-models
+    labels:
+      argocd.argoproj.io/managed-by: "{{ argocd_seed_namespace }}"
+      opendatahub.io/dashboard: "true"
+      modelmesh-enabled: "false"
+  - name: maas-routing
+    labels:
+      argocd.argoproj.io/managed-by: "{{ argocd_seed_namespace }}"
+
+# Values of the root Application (bootstrap/values.yaml in the gitops repo).
+argocd_seed_model_profile: "{{ 'gpu' if (gpu_enabled | default(false) | bool) else 'cpu' }}"
+argocd_seed_sota_api_base: "{{ sota_api_base | default('') }}"
+argocd_seed_sota_model: "{{ sota_model | default('') }}"
+argocd_seed_sota_served_match: "{{ sota_served_match | default('') }}"
+argocd_seed_secret_store_enabled: "{{ secret_store_enabled | default(false) }}"
+# Any other value of bootstrap/values.yaml, merged last (for example {tiers: [...]}).
+argocd_seed_extra_values: {}
+
+# Custom health checks on the ArgoCD CR (Argo CD already knows InferenceService and
+# ExternalSecret). They replace spec.resourceHealthChecks of the instance.
+argocd_seed_health_checks:
+  - group: argoproj.io
+    kind: Application
+    file: health-application.lua
+  - group: kuadrant.io
+    kind: AuthPolicy
+    file: health-kuadrant-policy.lua
+  - group: kuadrant.io
+    kind: TokenRateLimitPolicy
+    file: health-kuadrant-policy.lua
+
+# Wait until the root Application (and so every component) is Synced and Healthy.
+argocd_seed_wait: true
+argocd_seed_timeout: 1800
+argocd_seed_poll_delay: 20

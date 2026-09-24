@@ -1,0 +1,13 @@
+---
+# Create the root Argo CD Application that points to the gitops repo, after the
+# workload namespaces and the Argo CD health checks. Needs sota_api_base and sota_model.
+- name: GitOps seed
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Seed the gitops repo
+      ansible.builtin.include_role:
+        name: argocd_seed
+        apply:
+          tags: [argocd_seed]
+      tags: always

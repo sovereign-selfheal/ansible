@@ -1,0 +1,60 @@
+---
+- name: Create the inference Gateway and its Route
+  ansible.builtin.debug:
+    msg: >-
+      Gateway {{ ingress_gateway_namespace }}/{{ ingress_gateway_name }} (class {{ ingress_gateway_class }}),
+      Route {{ ingress_gateway_route_name }} for host {{ ingress_gateway_host_prefix }}.<apps domain>
+
+- name: Read the cluster ingress configuration
+  kubernetes.core.k8s_info:
+    api_version: config.openshift.io/v1
+    kind: Ingress
+    name: cluster
+  register: ingress_gateway_ingress_config
+  when: ingress_gateway_apps_domain | length == 0
+
+- name: Read the default IngressController
+  kubernetes.core.k8s_info:
+    api_version: operator.openshift.io/v1
+    kind: IngressController
+    name: default
+    namespace: openshift-ingress-operator
+  register: ingress_gateway_ingresscontroller
+  when: ingress_gateway_cert_secret | length == 0
+
+- name: Resolve the apps domain and the certificate Secret
+  ansible.builtin.set_fact:
+    ingress_gateway_domain: >-
+      {{ ingress_gateway_apps_domain
+         if ingress_gateway_apps_domain | length > 0
+         else (ingress_gateway_ingress_config.resources | first).spec.domain }}
+    ingress_gateway_cert: >-
+      {{ ingress_gateway_cert_secret
+         if ingress_gateway_cert_secret | length > 0
+         else ((ingress_gateway_ingresscontroller.resources | first).spec.defaultCertificate.name
+               | default(ingress_gateway_fallback_cert_secret)) }}
+
+- name: Show the resolved values
+  ansible.builtin.debug:
+    msg: "apps domain {{ ingress_gateway_domain }}, certificate Secret {{ ingress_gateway_namespace }}/{{ ingress_gateway_cert }}"
+
+- name: Ensure the Gateway and its ConfigMap
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ lookup('ansible.builtin.template', 'gateway.yaml.j2') | ansible.builtin.from_yaml_all | list }}"
+
+- name: Wait for the Gateway to be Programmed
+  kubernetes.core.k8s_info:
+    api_version: gateway.networking.k8s.io/v1
+    kind: Gateway
+    name: "{{ ingress_gateway_name }}"
+    namespace: "{{ ingress_gateway_namespace }}"
+    wait: true
+    wait_condition: {type: Programmed, status: "True"}
+    wait_timeout: "{{ ingress_gateway_timeout }}"
+  when: not ansible_check_mode
+
+- name: Ensure the passthrough Route
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ lookup('ansible.builtin.template', 'route.yaml.j2') | ansible.builtin.from_yaml }}"

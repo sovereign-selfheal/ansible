@@ -1,0 +1,30 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ argocd_seed_app_name }}
+  namespace: {{ argocd_seed_namespace }}
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: {{ argocd_seed_repo_url }}
+    targetRevision: {{ argocd_seed_revision }}
+    path: {{ argocd_seed_path }}
+    helm:
+      valuesObject:
+        {{ argocd_seed_values | to_nice_yaml(indent=2) | indent(8) }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{ argocd_seed_namespace }}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 10
+      backoff:
+        duration: 30s
+        factor: 2
+        maxDuration: 5m

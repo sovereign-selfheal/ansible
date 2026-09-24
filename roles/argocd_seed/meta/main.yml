@@ -1,0 +1,12 @@
+---
+galaxy_info:
+  role_name: argocd_seed
+  namespace: sovereign_selfheal
+  author: sovereign-selfheal demo team
+  description: Workload namespaces, Argo CD health checks and the root Application of the gitops repo
+  license: Apache-2.0
+  min_ansible_version: "2.18"
+  platforms:
+    - name: GenericLinux
+      versions: [all]
+dependencies: []

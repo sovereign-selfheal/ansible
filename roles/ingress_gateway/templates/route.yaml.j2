@@ -1,0 +1,22 @@
+---
+# Public entry point: TLS passthrough to the Gateway, which terminates TLS with the
+# ingress certificate. The Service name is generated as <gateway>-<gateway class>.
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: {{ ingress_gateway_route_name }}
+  namespace: {{ ingress_gateway_namespace }}
+  annotations:
+    haproxy.router.openshift.io/timeout: {{ ingress_gateway_route_timeout }}
+spec:
+  host: {{ ingress_gateway_host_prefix }}.{{ ingress_gateway_domain }}
+  to:
+    kind: Service
+    name: {{ ingress_gateway_name }}-{{ ingress_gateway_class }}
+    weight: 100
+  port:
+    targetPort: 443
+  tls:
+    termination: passthrough
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None

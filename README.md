@@ -8,8 +8,8 @@ Read [`AGENTS.md`](AGENTS.md) before changing anything.
 |---|---|---|
 | Preflight (reachability, OCP 4.22, default StorageClass, catalogs, external GPU nodes) | `playbooks/00-preflight.yml` | done |
 | Operators (OLM, pinned CSV, Manual approval) | `playbooks/10-operators.yml` | done |
-| Cluster prerequisites: GPU MachineSets ([`roles/gpu_node_prep`](roles/gpu_node_prep/README.md)), after the operators | `playbooks/20-prereqs.yml` | GPU part done; secrets todo |
-| Argo CD seed | `playbooks/30-gitops-seed.yml` | todo |
+| Cluster prerequisites: inference Gateway and Route ([`roles/ingress_gateway`](roles/ingress_gateway/README.md)), GPU MachineSets ([`roles/gpu_node_prep`](roles/gpu_node_prep/README.md)) | `playbooks/20-prereqs.yml` | done |
+| GitOps seed: namespaces, Argo CD health checks, root Application ([`roles/argocd_seed`](roles/argocd_seed/README.md)) | `playbooks/30-gitops-seed.yml` | done |
 | Teardown | `playbooks/99-destroy.yml` | todo |
 
 ## Operators
@@ -61,13 +61,14 @@ export KUBECONFIG=~/.kube/demo.kubeconfig
 # dry run: shows diffs, skips approvals and waits
 ansible-playbook playbooks/site.yml --check --diff
 
-# full bootstrap (currently preflight + operators)
-ansible-playbook playbooks/site.yml
+# full bootstrap: preflight, operators, prerequisites, GitOps seed.
+# The SOTA endpoint is not secret but stays out of tracked files: -e, or group_vars/all/vault.yml
+ansible-playbook playbooks/site.yml -e sota_api_base=https://<provider>/v1 -e sota_model=openai/<model>
 
 # a single operator
 ansible-playbook playbooks/10-operators.yml --tags rhoai
 
-# with GPU: operators first, then the GPU MachineSets (one run, in this order)
+# with GPU: operators first, then the GPU MachineSets (one run, in this order; SOTA values as above)
 ansible-playbook playbooks/site.yml -e gpu_enabled=true
 
 # end of the day: scale the GPU MachineSets to 0 (only stage 20, faster)

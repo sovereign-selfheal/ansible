@@ -1,0 +1,121 @@
+---
+- name: Seed the gitops repo
+  ansible.builtin.debug:
+    msg: >-
+      Root Application {{ argocd_seed_namespace }}/{{ argocd_seed_app_name }} ->
+      {{ argocd_seed_repo_url }}@{{ argocd_seed_revision }}:{{ argocd_seed_path }},
+      model profile {{ argocd_seed_model_profile }}, secret store enabled {{ argocd_seed_secret_store_enabled }}
+
+- name: Assert the SOTA settings are set
+  ansible.builtin.assert:
+    that:
+      - argocd_seed_sota_api_base | length > 0
+      - argocd_seed_sota_model | length > 0
+    fail_msg: >-
+      Set sota_api_base and sota_model (for example in group_vars/all/vault.yml or with -e).
+      They are not secret, but they are kept out of the tracked files.
+    quiet: true
+
+- name: Read the cluster ingress configuration
+  kubernetes.core.k8s_info:
+    api_version: config.openshift.io/v1
+    kind: Ingress
+    name: cluster
+  register: argocd_seed_ingress_config
+
+- name: Build the values of the root Application
+  ansible.builtin.set_fact:
+    argocd_seed_values: >-
+      {{ {'appsDomain': (argocd_seed_ingress_config.resources | first).spec.domain,
+          'modelProfile': argocd_seed_model_profile,
+          'sota': {'apiBase': argocd_seed_sota_api_base,
+                   'model': argocd_seed_sota_model,
+                   'servedMatch': argocd_seed_sota_served_match},
+          'secretStore': {'enabled': argocd_seed_secret_store_enabled | bool},
+          'repo': {'url': argocd_seed_repo_url, 'targetRevision': argocd_seed_revision}}
+         | combine(argocd_seed_extra_values, recursive=true) }}
+
+- name: Ensure the workload namespaces
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ argocd_seed_ns.name }}"
+        labels: "{{ argocd_seed_ns.labels }}"
+  loop: "{{ argocd_seed_namespaces }}"
+  loop_control:
+    loop_var: argocd_seed_ns
+    label: "{{ argocd_seed_ns.name }}"
+
+- name: Ensure the custom health checks of Argo CD
+  kubernetes.core.k8s:
+    state: patched
+    api_version: argoproj.io/v1beta1
+    kind: ArgoCD
+    name: "{{ argocd_seed_argocd_name }}"
+    namespace: "{{ argocd_seed_namespace }}"
+    merge_type: merge
+    definition:
+      spec:
+        resourceHealthChecks: >-
+          {%- set acc = namespace(list=[]) -%}
+          {%- for hc in argocd_seed_health_checks -%}
+          {%- set acc.list = acc.list + [{'group': hc.group, 'kind': hc.kind,
+                                          'check': lookup('ansible.builtin.file', hc.file)}] -%}
+          {%- endfor -%}
+          {{ acc.list }}
+
+- name: Ensure the root Application
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ lookup('ansible.builtin.template', 'root-application.yaml.j2') | ansible.builtin.from_yaml }}"
+
+- name: Wait for the workloads
+  when:
+    - argocd_seed_wait | bool
+    - not ansible_check_mode
+  block:
+    - name: Wait until the root Application is Synced and Healthy
+      kubernetes.core.k8s_info:
+        api_version: argoproj.io/v1alpha1
+        kind: Application
+        name: "{{ argocd_seed_app_name }}"
+        namespace: "{{ argocd_seed_namespace }}"
+      register: argocd_seed_root
+      until:
+        - argocd_seed_root.resources | length == 1
+        - (argocd_seed_root.resources | first).status.sync.status | default('') == 'Synced'
+        - (argocd_seed_root.resources | first).status.health.status | default('') == 'Healthy'
+      retries: "{{ ((argocd_seed_timeout | int) / (argocd_seed_poll_delay | int)) | round(0, 'ceil') | int }}"
+      delay: "{{ argocd_seed_poll_delay }}"
+      failed_when: false
+
+    - name: Read the component Applications
+      kubernetes.core.k8s_info:
+        api_version: argoproj.io/v1alpha1
+        kind: Application
+        namespace: "{{ argocd_seed_namespace }}"
+      register: argocd_seed_apps
+
+    - name: Show the state of every Application
+      ansible.builtin.debug:
+        msg: >-
+          {{ argocd_seed_app.metadata.name }}: sync={{ argocd_seed_app.status.sync.status | default('n/a') }}
+          health={{ argocd_seed_app.status.health.status | default('n/a') }}
+          {{ argocd_seed_app.status.conditions | default([]) | map(attribute='message') | join('; ') }}
+      loop: "{{ argocd_seed_apps.resources | sort(attribute='metadata.name') }}"
+      loop_control:
+        loop_var: argocd_seed_app
+        label: "{{ argocd_seed_app.metadata.name }}"
+
+    - name: Assert the root Application is Synced and Healthy
+      ansible.builtin.assert:
+        that:
+          - (argocd_seed_root.resources | first).status.sync.status | default('') == 'Synced'
+          - (argocd_seed_root.resources | first).status.health.status | default('') == 'Healthy'
+        fail_msg: >-
+          {{ argocd_seed_app_name }} is not Synced/Healthy after {{ argocd_seed_timeout }}s (see the task above).
+          Check the Applications in the Argo CD console.
+        success_msg: "{{ argocd_seed_app_name }} is Synced and Healthy"
