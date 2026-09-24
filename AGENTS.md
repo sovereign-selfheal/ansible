@@ -160,7 +160,7 @@ the flag on operators that this repo installs itself (RHCL, RHOAI, NFD, GPU oper
 
 - **Idempotency is mandatory.** Every playbook must be re-runnable with zero changes on the second run. Use `kubernetes.core.k8s` with `state: present` and `kubernetes.core.k8s_info` + `until` for waits. No `oc apply` via `shell` unless there is no module equivalent; if you must, add `changed_when`.
 - **No cluster-specific values in tasks.** Everything tunable goes to `group_vars/all/main.yml` or is passed with `-e`. Roles expose their variables in `defaults/main.yml`, documented in `README.md` of the role.
-- **Secrets**: only in `group_vars/all/vault.yml` (ansible-vault) or injected at runtime with `-e`/env vars. Never commit clear-text tokens, kubeconfigs, API keys. `.gitignore` already excludes `*.kubeconfig`, `.vault-password`, `*.pem`.
+- **Secrets**: workload secrets are managed by the External Secrets Operator (see §7). The only secret this repo handles is the credential of the `ClusterSecretStore`: it comes from `group_vars/all/vault.yml` (ansible-vault) or is injected at runtime with `-e`/env vars. Never commit clear-text tokens, kubeconfigs, API keys. `.gitignore` already excludes `*.kubeconfig`, `.vault-password`, `*.pem`.
 - **Naming**: roles and variables in `snake_case`; playbooks prefixed with two digits for ordering; tags equal to the role name (`--tags rhoai`).
 - **Fully qualified collection names** (`kubernetes.core.k8s`, not `k8s`).
 - **Waits, not sleeps.** `pause` is forbidden; poll a condition.
@@ -209,7 +209,28 @@ The playbooks must stay portable to an AgnosticD workload role:
 - Do not rely on local files outside the repo, interactive prompts, or the operator's laptop state.
 - Provide a `remove` path (`99-destroy.yml`) that mirrors the install order in reverse.
 
-## 7. Out of scope for this repo
+## 7. Contract with the `gitops` repo
+
+The same contract is in `gitops/AGENTS.md` §2. Keep both in sync.
+
+- **Ownership. No object is created by both repos.** This repo: operators, DSC, GatewayClass, Gateway
+  `openshift-ai-inference` (+ its ConfigMap), the passthrough `Route/maas-router` in `openshift-ingress`
+  (host `router.<apps domain>`, `haproxy.router.openshift.io/timeout: 180s`), Kuadrant + Authorino TLS,
+  GPU nodes, the namespaces `local-models` and `maas-routing`, the External Secrets Operator, the
+  `ClusterSecretStore` and its credential Secret, the Argo CD settings, the root Application.
+  `gitops`: every object inside `local-models` and `maas-routing`.
+- **Namespaces** `local-models` and `maas-routing` carry `argocd.argoproj.io/managed-by: openshift-gitops`
+  (the default Argo CD instance manages only labelled namespaces), and `local-models` also
+  `opendatahub.io/dashboard: "true"` and `modelmesh-enabled: "false"`.
+- **Root Application** (`30-gitops-seed.yml`): path `bootstrap` of the gitops repo, with `helm.valuesObject`:
+  `appsDomain` (from `ingresses.config/cluster`), `modelProfile` (`gpu` when `gpu_enabled`, else `cpu`),
+  `sota.apiBase`, `sota.model`, `sota.servedMatch`, and `secretStore.enabled` once the store exists.
+- **Argo CD health checks** on the ArgoCD CR: `argoproj.io/Application` (sync waves between components),
+  `serving.kserve.io/InferenceService`, Kuadrant `AuthPolicy` and `TokenRateLimitPolicy`.
+- **Secrets** are managed by the External Secrets Operator, not by `vault.yml`. This repo creates only the
+  credential that the `ClusterSecretStore` needs to read the external store.
+
+## 8. Out of scope for this repo
 
 Do **not** add here:
 
@@ -219,7 +240,7 @@ Do **not** add here:
 
 If a task seems to require adding a workload manifest here, stop and explain why it cannot live in `gitops` instead of adding it.
 
-## 8. When in doubt
+## 9. When in doubt
 
 - Prefer the smallest change that keeps the second run idempotent.
 - Do not invent operator channels, package names or CSV versions: resolve them on a real OCP 4.22 cluster (`scripts/resolve-operator-versions.sh`) and put the verified value in `group_vars` with the resolution date in a comment.
