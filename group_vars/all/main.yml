@@ -101,6 +101,36 @@ operators:
     operator_group_all_namespaces: false          # OwnNamespace, as in the old repo
     enabled: true
 
+  # 2b. External Secrets Operator: workload secrets come from an external store through
+  #     ExternalSecrets in the gitops repo. The store (ClusterSecretStore) is added later.
+  - key: external_secrets
+    name: openshift-external-secrets-operator
+    namespace: external-secrets-operator
+    channel: stable-v1.2
+    starting_csv: openshift-external-secrets-operator.v1.2.1   # resolved on OCP 4.22.14 on 2026-09-24
+    source: redhat-operators
+    source_namespace: openshift-marketplace
+    install_plan_approval: Manual
+    create_operator_group: true
+    operator_group_all_namespaces: true           # AllNamespaces is the only supported install mode
+    enabled: true
+    post_install:
+      - template: external-secrets-config.yaml.j2
+        vars:
+          name: cluster
+        wait:
+          api_version: operator.openshift.io/v1alpha1
+          kind: ExternalSecretsConfig
+          name: cluster
+          condition: {type: Ready, status: "True"}
+      # The CR is Ready before the webhook is: ExternalSecrets cannot be created until it runs.
+      - wait:
+          api_version: apps/v1
+          kind: Deployment
+          name: external-secrets-webhook
+          namespace: external-secrets
+          condition: {type: Available, status: "True"}
+
   # 3. Red Hat Connectivity Link, before RHOAI so odh-model-controller starts with Kuadrant present.
   #    Installed in openshift-operators (existing global-operators OperatorGroup). Only a
   #    `stable` channel exists; the pin + Manual approval freeze the version.

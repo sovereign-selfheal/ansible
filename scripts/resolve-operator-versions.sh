@@ -20,6 +20,7 @@ SHOW_ENTRIES="${SHOW_ENTRIES:-0}"
 DEFAULT_PACKAGES=(
   openshift-gitops-operator:redhat-operators
   openshift-cert-manager-operator:redhat-operators
+  openshift-external-secrets-operator:redhat-operators
   rhcl-operator:redhat-operators
   authorino-operator:redhat-operators
   limitador-operator:redhat-operators

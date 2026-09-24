@@ -21,6 +21,7 @@ Declared in `group_vars/all/main.yml` (`operators`) and installed in this order 
 |---|---|---|---|---|---|---|
 | `openshift_gitops` | openshift-gitops-operator | redhat-operators | openshift-gitops-operator | gitops-1.21 | openshift-gitops-operator.v1.21.4 | yes |
 | `cert_manager` | openshift-cert-manager-operator | redhat-operators | cert-manager-operator | stable-v1.20 | cert-manager-operator.v1.20.0 | yes |
+| `external_secrets` | openshift-external-secrets-operator | redhat-operators | external-secrets-operator | stable-v1.2 | openshift-external-secrets-operator.v1.2.1 | yes |
 | `rhcl` | rhcl-operator (+ authorino, limitador, dns) | redhat-operators | openshift-operators | stable | rhcl-operator.v1.4.3 | yes |
 | `authorino` | authorino-operator (RHCL dependency, adopted) | redhat-operators | openshift-operators | stable | authorino-operator.v1.4.3 | yes |
 | `limitador` | limitador-operator (RHCL dependency, adopted) | redhat-operators | openshift-operators | stable | limitador-operator.v1.4.2 | yes |

@@ -107,6 +107,7 @@ Templates only see the item's `vars`, so they contain no cluster-specific values
 | `rhoai-dsc.yaml.j2` | DataScienceCluster v2 | `status.phase == Ready` |
 | `nfd-instance.yaml.j2` | NodeFeatureDiscovery | `Available=True` |
 | `gpu-cluster-policy.yaml.j2` | NVIDIA ClusterPolicy | `status.state == ready` |
+| `external-secrets-config.yaml.j2` | ExternalSecretsConfig `cluster` (ESO) | `Ready=True`, then Deployment `external-secrets-webhook` `Available` |
 
 ## Role variables (`defaults/main.yml`)
 
