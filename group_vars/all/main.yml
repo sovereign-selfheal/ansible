@@ -348,28 +348,3 @@ operators:
           status_field: state
           value: ready
           timeout: 1800
-
-  # Not needed by RHOAI 3.5 (KServe is RawDeployment-only). Kept pinned and disabled.
-  - key: servicemesh
-    name: servicemeshoperator3
-    namespace: openshift-operators
-    manage_namespace: false
-    channel: stable-3.4
-    starting_csv: servicemeshoperator3.v3.4.2     # resolved on OCP 4.22.14 on 2026-09-23
-    source: redhat-operators
-    source_namespace: openshift-marketplace
-    install_plan_approval: Manual
-    create_operator_group: false
-    enabled: false
-
-  - key: serverless
-    name: serverless-operator
-    namespace: openshift-serverless
-    channel: stable-1.37
-    starting_csv: serverless-operator.v1.37.1     # resolved on OCP 4.22.14 on 2026-09-23
-    source: redhat-operators
-    source_namespace: openshift-marketplace
-    install_plan_approval: Manual
-    create_operator_group: true
-    operator_group_all_namespaces: true
-    enabled: false

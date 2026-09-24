@@ -29,8 +29,6 @@ Declared in `group_vars/all/main.yml` (`operators`) and installed in this order 
 | `rhoai` | rhods-operator | redhat-operators | redhat-ods-operator | stable-3.5 | rhods-operator.3.5.1 | yes |
 | `nfd` | nfd | redhat-operators | openshift-nfd | stable | nfd.4.22.0-202609151747 | `gpu_enabled` |
 | `gpu_operator` | gpu-operator-certified | certified-operators | nvidia-gpu-operator | v26.7 | gpu-operator-certified.v26.7.0 | `gpu_enabled` |
-| `servicemesh` | servicemeshoperator3 | redhat-operators | openshift-operators | stable-3.4 | servicemeshoperator3.v3.4.2 | no |
-| `serverless` | serverless-operator | redhat-operators | openshift-serverless | stable-1.37 | serverless-operator.v1.37.1 | no |
 
 Pins were resolved on OCP 4.22.14 on 2026-09-23. To refresh them against a cluster:
 

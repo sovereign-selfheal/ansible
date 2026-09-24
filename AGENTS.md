@@ -85,9 +85,14 @@ oc get packagemanifests -n openshift-marketplace <package> \
 | `rhoai` | Red Hat OpenShift AI | `rhods-operator` | `redhat-ods-operator` | `stable-3.5` | Creates `DataScienceCluster` (v2) with KServe; model serving (vLLM) itself is deployed by GitOps |
 | `nfd` | Node Feature Discovery | `nfd` | `openshift-nfd` | `stable` (only channel, tracks the OCP minor) | Only when `gpu_enabled: true`; required by the GPU operator. OwnNamespace OperatorGroup. Installed before the GPU nodes exist (see §3 "GPU nodes") |
 | `gpu_operator` | NVIDIA GPU Operator | `gpu-operator-certified` (catalog `certified-operators`) | `nvidia-gpu-operator` | `v26.7` | Only when `gpu_enabled: true`; needed by in-cluster vLLM. OwnNamespace OperatorGroup |
-| `servicemesh` / `serverless` | OSSM / OpenShift Serverless | `servicemeshoperator3` / `serverless-operator` | `openshift-operators` / `openshift-serverless` | `stable-3.4` / `stable-1.37` | Disabled: RHOAI 3.5 KServe is RawDeployment-only and needs neither |
 
 Verified on OCP 4.22.14 on 2026-09-23; pinned CSVs are in `group_vars/all/main.yml`.
+
+**Not installed: OpenShift Service Mesh and OpenShift Serverless.** RHOAI 3.5 serves models with KServe in
+`Standard` mode (the former RawDeployment), which needs neither Knative nor a mesh, so they are not in the
+`operators` list. The Istio control plane you see in `openshift-ingress` (`istiod-openshift-gateway`) is the
+OpenShift Gateway API implementation, started by the Ingress Operator for the GatewayClass: it is not the
+Service Mesh operator. Add them back only if a future RHOAI version requires them.
 
 Package names and channels above are the expected ones; **verify each one on the 4.22 cluster** and correct the table and `group_vars` if they differ. Prefer numbered channels wherever the catalog offers them: combined with Manual approval and `startingCSV` this freezes the version completely.
 
