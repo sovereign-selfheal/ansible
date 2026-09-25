@@ -35,7 +35,7 @@ in `AGENTS.md` §7.
 | `argocd_seed_extra_values` | `{}` | Other values of `bootstrap/values.yaml` |
 | `argocd_seed_namespaces` | `local-models`, `maas-routing` | Namespaces and labels |
 | `argocd_seed_health_checks` | Application, AuthPolicy, TokenRateLimitPolicy | Lua files in `files/` |
-| `argocd_seed_wait` / `_timeout` | `true` / `1800` | Wait for Synced and Healthy |
+| `argocd_seed_wait` / `_timeout` | `true` / `3600` (gpu), `1800` (cpu) | Wait for Synced and Healthy. The first start of Granite on a new GPU node takes about 26 min |
 
 ## Usage
 

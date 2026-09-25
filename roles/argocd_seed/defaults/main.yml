@@ -51,6 +51,8 @@ argocd_seed_health_checks:
     file: health-kuadrant-policy.lua
 
 # Wait until the root Application (and so every component) is Synced and Healthy.
+# With the gpu profile the first start of Granite takes about 26 minutes on a new GPU node
+# (model image pull 15 min, vLLM image, model load), so the wait is longer there.
 argocd_seed_wait: true
-argocd_seed_timeout: 1800
+argocd_seed_timeout: "{{ 3600 if argocd_seed_model_profile == 'gpu' else 1800 }}"
 argocd_seed_poll_delay: 20
