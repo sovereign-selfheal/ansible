@@ -254,7 +254,7 @@ The same contract is in `gitops/AGENTS.md` §2. Keep both in sync.
 Do **not** add here:
 
 - vLLM `InferenceService`/`ServingRuntime`, Presidio, Kuadrant `AuthPolicy`/`RateLimitPolicy`, the LLM router, the SRE agents, the sample app, dashboards → `gitops` repo.
-- Application source code and container builds → `router`, `agents`, `sample-app` repos.
+- Application source code and container builds → `router`, `presidio`, `agents`, `sample-app` repos.
 - Demo narrative/lab guide → `showroom` repo.
 
 If a task seems to require adding a workload manifest here, stop and explain why it cannot live in `gitops` instead of adding it.
