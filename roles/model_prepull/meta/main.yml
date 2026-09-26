@@ -1,0 +1,12 @@
+---
+galaxy_info:
+  role_name: model_prepull
+  namespace: sovereign_selfheal
+  author: sovereign-selfheal demo team
+  description: Pre-pull the local model images (modelcar and vLLM runtime) on the nodes that serve the model
+  license: Apache-2.0
+  min_ansible_version: "2.18"
+  platforms:
+    - name: GenericLinux
+      versions: [all]
+dependencies: []

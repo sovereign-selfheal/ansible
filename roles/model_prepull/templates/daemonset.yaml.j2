@@ -1,0 +1,41 @@
+---
+# Pre-pull of one image: the pod only sleeps, so the kubelet pulls the image on every
+# matching node and keeps it in use. No GPU request: it does not take the GPU of the model.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: prepull-{{ model_prepull_key }}
+  namespace: {{ model_prepull_namespace }}
+  labels:
+    app.kubernetes.io/name: model-prepull
+    app.kubernetes.io/component: {{ model_prepull_key }}
+    app.kubernetes.io/part-of: sovereign-selfheal
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: model-prepull
+      app.kubernetes.io/component: {{ model_prepull_key }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: model-prepull
+        app.kubernetes.io/component: {{ model_prepull_key }}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 1
+      nodeSelector: {{ model_prepull_node_selectors[model_prepull_profile] | to_json }}
+      tolerations: {{ model_prepull_tolerations[model_prepull_profile] | to_json }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: prepull
+          image: {{ model_prepull_image }}
+          imagePullPolicy: IfNotPresent
+          command: {{ model_prepull_commands[model_prepull_key] | to_json }}
+          resources: {{ model_prepull_resources | to_json }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]

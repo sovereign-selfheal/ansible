@@ -1,0 +1,30 @@
+---
+# Start the slow node work early, so that it runs while 10-operators installs the operators:
+# - create the GPU MachineSets without waiting (roles/gpu_node_prep, gpu_node_prep_wait false):
+#   AWS builds the GPU node in the background;
+# - create the pre-pull DaemonSets of the local model images (roles/model_prepull): the pull
+#   starts as soon as the node joins.
+# 20-prereqs waits for the GPU nodes (sync point); 30-gitops-seed reports the pre-pull.
+- name: Early nodes and model pre-pull
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Create the GPU MachineSets (no wait)
+      ansible.builtin.include_role:
+        name: gpu_node_prep
+        apply:
+          tags: [gpu_node_prep]
+      vars:
+        gpu_node_prep_wait: false
+      when:
+        - gpu_enabled | bool
+        - gpu_nodes_managed | bool
+      tags: always
+
+    - name: Pre-pull the local model images
+      ansible.builtin.include_role:
+        name: model_prepull
+        apply:
+          tags: [model_prepull]
+      when: model_prepull_enabled | bool
+      tags: always

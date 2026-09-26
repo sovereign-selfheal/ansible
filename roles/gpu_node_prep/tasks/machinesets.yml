@@ -1,0 +1,124 @@
+---
+# One GPU MachineSet per zone, cloned from that zone's worker MachineSet: same AMI,
+# subnet, security groups and tags; instance type, root disk, labels and taints change.
+
+- name: Reconcile GPU MachineSets
+  ansible.builtin.debug:
+    msg: >-
+      Reconciling GPU MachineSets: instance_type={{ gpu_node_prep_instance_type }}
+      zones={{ gpu_node_prep_zones | default([], true) or 'all worker zones' }}
+      active_zones={{ gpu_node_prep_active_zone_count }} replicas_per_active_zone={{ gpu_node_prep_replicas }}
+      check_mode={{ ansible_check_mode }}
+
+- name: Read the cluster Infrastructure
+  kubernetes.core.k8s_info:
+    api_version: config.openshift.io/v1
+    kind: Infrastructure
+    name: cluster
+  register: gpu_node_prep_infra
+
+- name: Assert the platform is AWS
+  ansible.builtin.assert:
+    that:
+      - (gpu_node_prep_infra.resources | first).status.platformStatus.type == 'AWS'
+    fail_msg: >-
+      gpu_node_prep supports only AWS (platform is
+      {{ (gpu_node_prep_infra.resources | first).status.platformStatus.type }}).
+    quiet: true
+
+- name: List the MachineSets
+  kubernetes.core.k8s_info:
+    api_version: machine.openshift.io/v1beta1
+    kind: MachineSet
+    namespace: "{{ gpu_node_prep_machine_api_namespace }}"
+  register: gpu_node_prep_machinesets
+
+- name: Pick one worker MachineSet per zone as the source
+  vars:
+    gpu_node_prep_workers: >-
+      {{ gpu_node_prep_machinesets.resources
+         | selectattr('spec.template.metadata.labels', 'defined')
+         | selectattr('spec.template.metadata.labels', 'contains', 'machine.openshift.io/cluster-api-machine-type')
+         | list }}
+  ansible.builtin.set_fact:
+    gpu_node_prep_infra_id: "{{ (gpu_node_prep_infra.resources | first).status.infrastructureName }}"
+    gpu_node_prep_sources: >-
+      {%- set acc = namespace(by_zone={}) -%}
+      {%- for ms in gpu_node_prep_workers | sort(attribute='metadata.name') -%}
+      {%- set labels = ms.spec.template.metadata.labels -%}
+      {%- set zone = ms.spec.template.spec.providerSpec.value.placement.availabilityZone -%}
+      {%- if labels['machine.openshift.io/cluster-api-machine-role'] | default('') == 'worker'
+            and labels['machine.openshift.io/cluster-api-machine-type'] | default('') == 'worker'
+            and zone not in acc.by_zone -%}
+      {%- set acc.by_zone = acc.by_zone | combine({zone: ms}) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ acc.by_zone }}
+
+- name: Resolve the zones
+  ansible.builtin.set_fact:
+    gpu_node_prep_zone_list: "{{ gpu_node_prep_zones if gpu_node_prep_zones | length > 0 else (gpu_node_prep_sources.keys() | sort) }}"
+
+- name: Assert every zone has a worker MachineSet to clone
+  ansible.builtin.assert:
+    that:
+      - gpu_node_prep_zone_list | length > 0
+      - gpu_node_prep_zone_list | difference(gpu_node_prep_sources.keys() | list) | length == 0
+    fail_msg: >-
+      No worker MachineSet to clone for zones
+      {{ gpu_node_prep_zone_list | difference(gpu_node_prep_sources.keys() | list) }}
+      (worker zones: {{ gpu_node_prep_sources.keys() | list }}).
+    quiet: true
+
+- name: Ensure the GPU MachineSets
+  vars:
+    gpu_node_prep_source: "{{ gpu_node_prep_sources[gpu_node_prep_zone] }}"
+    gpu_node_prep_name: "{{ gpu_node_prep_infra_id }}-gpu-{{ gpu_node_prep_zone }}"
+    gpu_node_prep_zone_replicas: >-
+      {{ (gpu_node_prep_replicas | int) if gpu_node_prep_index < (gpu_node_prep_active_zone_count | int) else 0 }}
+    # Root disk: the worker's first block device with the GPU size, type and (when set) IOPS and
+    # throughput. Encryption, KMS key and any other block device stay as in the worker.
+    gpu_node_prep_source_devices: "{{ gpu_node_prep_source.spec.template.spec.providerSpec.value.blockDevices | default([{'ebs': {}}], true) }}"
+    gpu_node_prep_root_ebs: >-
+      {{ (gpu_node_prep_source_devices | first).ebs | default({})
+         | combine({'volumeSize': gpu_node_prep_volume_size | int, 'volumeType': gpu_node_prep_volume_type})
+         | combine({'iops': gpu_node_prep_volume_iops | int} if gpu_node_prep_volume_iops | string | length > 0 else {})
+         | combine({'throughput': gpu_node_prep_volume_throughput | int} if gpu_node_prep_volume_throughput | string | length > 0 else {}) }}
+    gpu_node_prep_block_devices: >-
+      {{ [(gpu_node_prep_source_devices | first) | combine({'ebs': gpu_node_prep_root_ebs})] + (gpu_node_prep_source_devices[1:] | list) }}
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: machine.openshift.io/v1beta1
+      kind: MachineSet
+      metadata:
+        name: "{{ gpu_node_prep_name }}"
+        namespace: "{{ gpu_node_prep_machine_api_namespace }}"
+        labels:
+          machine.openshift.io/cluster-api-cluster: "{{ gpu_node_prep_infra_id }}"
+      spec:
+        replicas: "{{ gpu_node_prep_zone_replicas | int }}"
+        selector:
+          matchLabels:
+            machine.openshift.io/cluster-api-cluster: "{{ gpu_node_prep_infra_id }}"
+            machine.openshift.io/cluster-api-machineset: "{{ gpu_node_prep_name }}"
+        template:
+          metadata:
+            labels:
+              machine.openshift.io/cluster-api-cluster: "{{ gpu_node_prep_infra_id }}"
+              machine.openshift.io/cluster-api-machine-role: worker
+              machine.openshift.io/cluster-api-machine-type: gpu
+              machine.openshift.io/cluster-api-machineset: "{{ gpu_node_prep_name }}"
+          spec:
+            metadata:
+              labels: "{{ gpu_node_prep_node_labels }}"
+            taints: "{{ gpu_node_prep_taints }}"
+            providerSpec:
+              value: >-
+                {{ gpu_node_prep_source.spec.template.spec.providerSpec.value
+                   | combine({'instanceType': gpu_node_prep_instance_type,
+                              'blockDevices': gpu_node_prep_block_devices}) }}
+  loop: "{{ gpu_node_prep_zone_list }}"
+  loop_control:
+    loop_var: gpu_node_prep_zone
+    index_var: gpu_node_prep_index

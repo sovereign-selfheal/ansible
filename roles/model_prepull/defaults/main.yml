@@ -1,0 +1,60 @@
+---
+# model_prepull: pull the images of the local model on the nodes that will serve it, as early
+# as possible and in parallel (one DaemonSet per image). The InferenceService of the gitops
+# repo then finds them in the node cache. The DaemonSets stay: their pods keep the images in use,
+# so the kubelet does not delete them.
+
+model_prepull_namespace: sovereign-selfheal-prepull
+
+# `gpu` (Granite on the GPU nodes) or `cpu` (small Qwen on the workers). Same rule as
+# argocd_seed_model_profile.
+model_prepull_profile: "{{ 'gpu' if (gpu_enabled | default(true) | bool) else 'cpu' }}"
+
+# Images per profile, by digest, without the oci:// prefix of storageUri.
+# They must match localModel.profiles.<profile>.storageUri and .runtimeImage in
+# gitops/bootstrap/values.yaml; after the seed, tasks/verify.yml warns when they differ.
+model_prepull_images:
+  gpu:
+    # granite-3.3-8b-instruct-20260805t2227z (gitops values.yaml, resolved on 2026-09-24)
+    modelcar: quay.io/redhat-ai-services/modelcar-catalog@sha256:735e0ff14f64d720566e24f21d8e5fa435f8dfcc3416b7614666f8f7d1fd8191
+    # RHOAI 3.5.1 template vllm-cuda-runtime-template
+    runtime: registry.redhat.io/rhaii/vllm-cuda-rhel9@sha256:c056e61672b6aea489ad5dde0bd2f8497230f5333e87f7cf6c494eba3bfdc808
+  cpu:
+    # qwen2.5-0.5b-instruct-20260810t1646z (gitops values.yaml, resolved on 2026-09-24)
+    modelcar: quay.io/redhat-ai-services/modelcar-catalog@sha256:e20441c23be795838409137576b9016e6bc941eec79e5765cf9de6319c0ec769
+    # RHOAI 3.5.1 template vllm-cpu-x86-runtime-template
+    runtime: registry.redhat.io/rhaii/vllm-cpu-rhel9@sha256:7a28b867955055a8836ea2a78e70b8bad63c1ee50e8a5f8dd95d1194f20ec489
+
+# Command of each pre-pull container: it only has to stay up. The modelcar image has sh and
+# sleep (KServe runs `sleep infinity` in it too).
+model_prepull_commands:
+  modelcar: [sh, -c, sleep infinity]
+  runtime: [sleep, infinity]
+
+# Nodes. gpu: the label that roles/gpu_node_prep puts on the node when it is created, so the
+# pull starts as soon as the node joins (nvidia.com/gpu.present appears only after NFD and the
+# GPU operator). GPU nodes from outside (gpu_nodes_managed false): the preflight label.
+model_prepull_node_selectors:
+  gpu: >-
+    {{ {'node-role.kubernetes.io/gpu': ''} if (gpu_nodes_managed | default(true) | bool)
+       else {'nvidia.com/gpu.present': 'true'} }}
+  cpu:
+    node-role.kubernetes.io/worker: ""
+# The same toleration as the InferenceService of the gitops repo.
+model_prepull_tolerations:
+  gpu:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
+  cpu: []
+
+model_prepull_resources:
+  requests:
+    cpu: 10m
+    memory: 32Mi
+  limits:
+    memory: 64Mi
+
+# Pod of the model server, for the check after the seed (tasks/verify.yml).
+model_prepull_predictor_namespace: local-models
+model_prepull_predictor_selector: component=predictor

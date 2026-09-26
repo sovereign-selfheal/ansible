@@ -1,0 +1,49 @@
+---
+# Namespace and one DaemonSet per image of the selected profile. No wait: the pull runs in the
+# background while the rest of the bootstrap goes on (tasks/status.yml reports it before the seed).
+
+- name: Pre-pull the local model images
+  ansible.builtin.debug:
+    msg: >-
+      Profile {{ model_prepull_profile }}, namespace {{ model_prepull_namespace }},
+      nodes {{ model_prepull_node_selectors[model_prepull_profile] }},
+      images {{ model_prepull_images[model_prepull_profile] }}
+
+- name: Ensure the pre-pull namespace
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ model_prepull_namespace }}"
+
+# In check mode the namespace above is only dry-run created, so the DaemonSets cannot be
+# dry-run either: they are reported and skipped.
+- name: Read the pre-pull namespace
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Namespace
+    name: "{{ model_prepull_namespace }}"
+  register: model_prepull_ns
+
+- name: Check mode, namespace does not exist yet
+  ansible.builtin.debug:
+    msg: >-
+      Check mode: namespace {{ model_prepull_namespace }} would be created; the DaemonSets
+      {{ model_prepull_images[model_prepull_profile].keys() | map('regex_replace', '^', 'prepull-') | join(', ') }}
+      would be created in it (not dry-run).
+  when: ansible_check_mode and model_prepull_ns.resources | length == 0
+
+- name: Ensure one pre-pull DaemonSet per image
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ lookup('ansible.builtin.template', 'daemonset.yaml.j2') | ansible.builtin.from_yaml }}"
+  loop: "{{ model_prepull_images[model_prepull_profile] | dict2items }}"
+  loop_control:
+    loop_var: model_prepull_item
+    label: "prepull-{{ model_prepull_item.key }}"
+  vars:
+    model_prepull_key: "{{ model_prepull_item.key }}"
+    model_prepull_image: "{{ model_prepull_item.value }}"
+  when: not (ansible_check_mode and model_prepull_ns.resources | length == 0)

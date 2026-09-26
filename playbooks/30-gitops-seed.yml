@@ -1,13 +1,33 @@
 ---
 # Create the root Argo CD Application that points to the gitops repo, after the
 # workload namespaces and the Argo CD health checks. Needs sota_api_base and sota_model.
+# Before the seed: report the model pre-pull (no wait). After: check that the model uses
+# the pre-pulled images.
 - name: GitOps seed
   hosts: localhost
   gather_facts: false
   tasks:
+    - name: Report the model pre-pull
+      ansible.builtin.include_role:
+        name: model_prepull
+        tasks_from: status
+        apply:
+          tags: [model_prepull]
+      when: model_prepull_enabled | bool
+      tags: always
+
     - name: Seed the gitops repo
       ansible.builtin.include_role:
         name: argocd_seed
         apply:
           tags: [argocd_seed]
+      tags: always
+
+    - name: Check that the model uses the pre-pulled images
+      ansible.builtin.include_role:
+        name: model_prepull
+        tasks_from: verify
+        apply:
+          tags: [model_prepull]
+      when: model_prepull_enabled | bool
       tags: always

@@ -1,0 +1,107 @@
+---
+# Wait until the GPU nodes are Running, Ready and expose nvidia.com/gpu, then until the
+# NVIDIA ClusterPolicy is ready. Needs the GPU operator (playbooks/10-operators.yml).
+
+- name: Wait for the GPU machines
+  when: not ansible_check_mode
+  vars:
+    gpu_node_prep_expected: >-
+      {{ [gpu_node_prep_zone_list | length, gpu_node_prep_active_zone_count | int] | min * (gpu_node_prep_replicas | int) }}
+  block:
+    # Done when the expected number of machines is Running (0 after a scale-down),
+    # or as soon as one machine is Failed (e.g. AWS quota or capacity errors).
+    - name: Wait until the GPU machines are Running or one fails
+      kubernetes.core.k8s_info:
+        api_version: machine.openshift.io/v1beta1
+        kind: Machine
+        namespace: "{{ gpu_node_prep_machine_api_namespace }}"
+        label_selectors:
+          - "machine.openshift.io/cluster-api-cluster={{ gpu_node_prep_infra_id }}"
+          - "machine.openshift.io/cluster-api-machine-type=gpu"
+      register: gpu_node_prep_machines
+      until: >-
+        (gpu_node_prep_machines.resources | selectattr('status.phase', 'defined')
+         | selectattr('status.phase', 'equalto', 'Failed') | list | length > 0)
+        or (gpu_node_prep_machines.resources | length == gpu_node_prep_expected | int
+            and gpu_node_prep_machines.resources | selectattr('status.phase', 'defined')
+                | selectattr('status.phase', 'equalto', 'Running') | list | length == gpu_node_prep_expected | int)
+      retries: "{{ ((gpu_node_prep_timeout | int) / (gpu_node_prep_poll_delay | int)) | round(0, 'ceil') | int }}"
+      delay: "{{ gpu_node_prep_poll_delay }}"
+      failed_when: false
+
+    - name: Assert no GPU machine failed
+      vars:
+        gpu_node_prep_failed: >-
+          {{ gpu_node_prep_machines.resources | default([]) | selectattr('status.phase', 'defined')
+             | selectattr('status.phase', 'equalto', 'Failed') | list }}
+      ansible.builtin.assert:
+        that:
+          - gpu_node_prep_failed | length == 0
+        fail_msg: >-
+          GPU machine(s) failed:
+          {% for m in gpu_node_prep_failed %}{{ m.metadata.name }}: {{ m.status.errorMessage | default('no message') }}; {% endfor %}
+          Check the AWS quota for G instances and the {{ gpu_node_prep_instance_type }} capacity in the zone.
+        quiet: true
+
+    - name: Assert the GPU machines are Running
+      ansible.builtin.assert:
+        that:
+          - gpu_node_prep_machines.resources | length == gpu_node_prep_expected | int
+          - >-
+            gpu_node_prep_machines.resources | selectattr('status.phase', 'defined')
+            | selectattr('status.phase', 'equalto', 'Running') | list | length == gpu_node_prep_expected | int
+        fail_msg: >-
+          Expected {{ gpu_node_prep_expected }} Running GPU machine(s) after {{ gpu_node_prep_timeout }}s, found:
+          {% for m in gpu_node_prep_machines.resources %}{{ m.metadata.name }}={{ m.status.phase | default('n/a') }} {% endfor %}
+        success_msg: "{{ gpu_node_prep_expected }} GPU machine(s) Running"
+
+    - name: Wait for the GPU nodes to be Ready
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Node
+        label_selectors:
+          - "{{ gpu_node_prep_node_labels.keys() | first }}"
+        wait: true
+        wait_condition: {type: Ready, status: "True"}
+        wait_timeout: 600
+      when: gpu_node_prep_expected | int > 0
+
+    - name: Wait until every GPU node exposes nvidia.com/gpu
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Node
+        label_selectors:
+          - "{{ gpu_node_prep_node_labels.keys() | first }}"
+      register: gpu_node_prep_gpu_nodes
+      vars:
+        gpu_node_prep_with_gpu: >-
+          {%- set acc = namespace(n=0) -%}
+          {%- for node in gpu_node_prep_gpu_nodes.resources | default([]) -%}
+          {%- if (node.status.allocatable | default({}))['nvidia.com/gpu'] | default('0') | int >= 1 -%}
+          {%- set acc.n = acc.n + 1 -%}
+          {%- endif -%}
+          {%- endfor -%}
+          {{ acc.n }}
+      until:
+        - gpu_node_prep_gpu_nodes.resources | length == gpu_node_prep_expected | int
+        - gpu_node_prep_with_gpu | int == gpu_node_prep_expected | int
+      retries: "{{ ((gpu_node_prep_gpu_timeout | int) / (gpu_node_prep_poll_delay | int)) | round(0, 'ceil') | int }}"
+      delay: "{{ gpu_node_prep_poll_delay }}"
+      when:
+        - gpu_node_prep_expected | int > 0
+        - gpu_node_prep_wait_gpu_allocatable | bool
+
+    - name: Wait until the NVIDIA ClusterPolicy is ready
+      kubernetes.core.k8s_info:
+        api_version: nvidia.com/v1
+        kind: ClusterPolicy
+        name: "{{ gpu_node_prep_cluster_policy_name }}"
+      register: gpu_node_prep_cluster_policy
+      until:
+        - gpu_node_prep_cluster_policy.resources | length == 1
+        - (gpu_node_prep_cluster_policy.resources | first).status.state | default('') == 'ready'
+      retries: "{{ ((gpu_node_prep_gpu_timeout | int) / (gpu_node_prep_poll_delay | int)) | round(0, 'ceil') | int }}"
+      delay: "{{ gpu_node_prep_poll_delay }}"
+      when:
+        - gpu_node_prep_expected | int > 0
+        - gpu_node_prep_wait_cluster_policy | bool

@@ -1,0 +1,69 @@
+---
+# Report the pre-pull before the seed. Never waits and never fails: if the pull is still
+# running, the model pod on the same node joins the pull that is in progress.
+
+- name: Read the pre-pull DaemonSets
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: DaemonSet
+    namespace: "{{ model_prepull_namespace }}"
+    label_selectors:
+      - app.kubernetes.io/name=model-prepull
+  register: model_prepull_ds
+
+- name: Read the pre-pull pods
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Pod
+    namespace: "{{ model_prepull_namespace }}"
+    label_selectors:
+      - app.kubernetes.io/name=model-prepull
+  register: model_prepull_pods
+
+- name: Report the pre-pull
+  vars:
+    model_prepull_lines: >-
+      {%- set acc = namespace(lines=[]) -%}
+      {%- for key in model_prepull_images[model_prepull_profile].keys() | sort -%}
+      {%- set ds = model_prepull_ds.resources | selectattr('metadata.name', 'equalto', 'prepull-' ~ key) | list -%}
+      {%- if ds | length == 0 -%}
+      {%- set acc.lines = acc.lines + [key ~ ': no DaemonSet (model_prepull did not run)'] -%}
+      {%- else -%}
+      {%- set st = (ds | first).status | default({}) -%}
+      {%- set desired = st.desiredNumberScheduled | default(0) | int -%}
+      {%- set ready = st.numberReady | default(0) | int -%}
+      {%- if desired == 0 -%}
+      {%- set acc.lines = acc.lines + [key ~ ': no node yet (the GPU node has not joined the cluster)'] -%}
+      {%- elif ready == desired -%}
+      {%- set acc.lines = acc.lines + [key ~ ': image present on ' ~ ready ~ '/' ~ desired ~ ' node(s)'] -%}
+      {%- else -%}
+      {%- set w = namespace(pods=[]) -%}
+      {%- for pod in model_prepull_pods.resources
+            if pod.metadata.labels['app.kubernetes.io/component'] | default('') == key -%}
+      {%- set cs = (pod.status.containerStatuses | default([{}])) | first -%}
+      {%- set reason = cs.state.waiting.reason | default(pod.status.phase | default('Pending')) if cs.state is defined
+                       else pod.status.phase | default('Pending') -%}
+      {%- set minutes = ((now(utc=true) - (pod.metadata.creationTimestamp | to_datetime('%Y-%m-%dT%H:%M:%SZ'))).total_seconds() / 60) | int -%}
+      {%- set w.pods = w.pods + [pod.spec.nodeName | default('unscheduled') ~ ' ' ~ reason ~ ' for ' ~ minutes ~ ' min'] -%}
+      {%- endfor -%}
+      {%- set acc.lines = acc.lines + [key ~ ': ready on ' ~ ready ~ '/' ~ desired ~ ' node(s), not ready: ' ~ (w.pods | join('; '))] -%}
+      {%- endif -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ acc.lines }}
+  ansible.builtin.debug:
+    msg: "{{ model_prepull_lines }}"
+
+- name: Warn about images that cannot be pulled
+  vars:
+    model_prepull_failed: >-
+      {{ model_prepull_pods.resources
+         | map(attribute='status.containerStatuses', default=[]) | flatten
+         | selectattr('state.waiting.reason', 'defined')
+         | selectattr('state.waiting.reason', 'in', ['ErrImagePull', 'ImagePullBackOff', 'InvalidImageName'])
+         | map(attribute='image') | unique | list }}
+  ansible.builtin.debug:
+    msg: >-
+      WARNING: the pre-pull cannot pull {{ model_prepull_failed | join(', ') }}. The model pod will
+      probably fail the same way: check the digest in model_prepull_images and in gitops values.yaml.
+  when: model_prepull_failed | length > 0

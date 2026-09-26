@@ -17,6 +17,9 @@ gpu_enabled: true
 # false: the GPU nodes come from outside (e.g. an RHDP catalog item with GPUs);
 #       preflight then fails if there are none.
 gpu_nodes_managed: true
+# Pull the local model images on the model nodes early and in parallel, while the operators are
+# installed (roles/model_prepull, playbooks/05-early-nodes.yml). Images: model_prepull_images.
+model_prepull_enabled: true
 
 # ----- SOTA model and secrets (roles/secrets_bootstrap, roles/argocd_seed) ----------
 # Set these in group_vars/all/vault.yml (ansible-vault, see vault.yml.example) or pass

@@ -1,0 +1,38 @@
+---
+# After the seed: the model pod must use the same images as the pre-pull, otherwise the
+# pre-pull downloads images nobody uses (the digests in gitops values.yaml changed).
+# Warns, never fails.
+
+- name: Read the model server pod
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Pod
+    namespace: "{{ model_prepull_predictor_namespace }}"
+    label_selectors:
+      - "{{ model_prepull_predictor_selector }}"
+  register: model_prepull_predictor
+
+- name: Compare the model images with the pre-pull
+  ansible.builtin.set_fact:
+    model_prepull_used: >-
+      {{ model_prepull_predictor.resources
+         | map(attribute='spec.containers') | flatten
+         | selectattr('name', 'in', ['kserve-container', 'modelcar'])
+         | map(attribute='image') | unique | sort }}
+
+- name: Report a model server that is not running yet
+  ansible.builtin.debug:
+    msg: "No model server pod in {{ model_prepull_predictor_namespace }} yet: comparison skipped."
+  when: model_prepull_predictor.resources | length == 0
+
+- name: Report the images of the model server
+  vars:
+    model_prepull_missing: "{{ model_prepull_used | difference(model_prepull_images[model_prepull_profile].values() | list) }}"
+  ansible.builtin.debug:
+    msg: >-
+      {{ 'The model server uses the pre-pulled images: ' ~ (model_prepull_used | join(', '))
+         if model_prepull_missing | length == 0 else
+         'WARNING: the model server uses images that are not pre-pulled: ' ~ (model_prepull_missing | join(', '))
+         ~ '. Update model_prepull_images.' ~ model_prepull_profile ~ ' (roles/model_prepull/defaults/main.yml)'
+         ~ ' to match localModel.profiles.' ~ model_prepull_profile ~ ' in gitops/bootstrap/values.yaml.' }}
+  when: model_prepull_predictor.resources | length > 0

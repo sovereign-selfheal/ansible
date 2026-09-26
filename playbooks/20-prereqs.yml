@@ -3,7 +3,9 @@
 # - the inference Gateway and its passthrough Route (roles/ingress_gateway);
 # - the secret values for the External Secrets Operator (roles/secrets_bootstrap);
 # - the GPU MachineSets, when gpu_enabled and gpu_nodes_managed (roles/gpu_node_prep).
-#   They run after 10-operators: the GPU wait needs the NVIDIA operator.
+#   05-early-nodes already created them; here the role waits for the GPU nodes (Running,
+#   Ready, nvidia.com/gpu, ClusterPolicy ready). This is the sync point of the node and the
+#   operators: it runs after 10-operators because the GPU wait needs the NVIDIA operator.
 # Scale every GPU MachineSet to 0:  -e gpu_node_prep_replicas=0 --tags gpu_node_prep
 - name: Cluster prerequisites
   hosts: localhost

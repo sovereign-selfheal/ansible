@@ -42,14 +42,16 @@ Target platform: **demo.redhat.com** (RHDP). The code must be structured so that
 ├── playbooks/
 │   ├── site.yml                # full bootstrap, calls the others in order
 │   ├── 00-preflight.yml        # cluster reachability, version, node/GPU checks
+│   ├── 05-early-nodes.yml      # GPU MachineSets (no wait) + model image pre-pull, before the operators
 │   ├── 10-operators.yml        # OLM subscriptions
-│   ├── 20-prereqs.yml          # GPU MachineSets (after the operators), secrets, namespaces owned by Ansible
+│   ├── 20-prereqs.yml          # waits for the GPU nodes (after the operators), secrets, Gateway
 │   ├── 30-gitops-seed.yml      # Argo CD Application → gitops repo
 │   └── 99-destroy.yml          # optional teardown, symmetric to site.yml
 ├── roles/
 │   ├── ocp_preflight/
 │   ├── olm_operator/           # generic, reusable: one role, N operators via vars
 │   ├── gpu_node_prep/
+│   ├── model_prepull/          # pre-pull DaemonSets of the local model images
 │   ├── ingress_gateway/        # RHOAI inference Gateway + passthrough Route (contract with gitops)
 │   ├── secrets_bootstrap/      # secret values for ESO + ClusterSecretStore (provider kubernetes)
 │   └── argocd_seed/
@@ -146,11 +148,16 @@ The `olm_operator` role must, for every entry:
 
 On re-runs the role must detect that the pinned CSV is already `Succeeded` and skip steps 4–5 without changes (idempotent); step 3 is re-applied but is a no-op unless the Subscription drifted (this is also how pre-existing RHDP Subscriptions are adopted). Pending InstallPlans for newer versions, if OLM creates them, are left unapproved and reported in a final `debug` summary.
 
-**GPU nodes (`gpu_nodes_managed`).** The operators are installed first (stage 10), then the GPU
-MachineSets (stage 20, `roles/gpu_node_prep`). This order works because the NVIDIA `ClusterPolicy`
-is `ready` also when the cluster has no GPU nodes (verified on OCP 4.22.14 with GPU operator v26.7.0).
-Stage 20 then waits until each GPU node exposes `nvidia.com/gpu`. With `gpu_nodes_managed: false`
-the GPU nodes come from outside (for example an RHDP catalog item with GPUs): stage 20 does not
+**GPU nodes (`gpu_nodes_managed`).** The GPU MachineSets are created **before** the operators
+(stage 05, `roles/gpu_node_prep` with `gpu_node_prep_wait: false`), so AWS builds the node while
+stage 10 installs the operators; stage 05 also starts the pre-pull of the model images
+(`roles/model_prepull`). Stage 20 runs `gpu_node_prep` again with the waits: machines Running,
+nodes Ready, `nvidia.com/gpu` allocatable, ClusterPolicy `ready`. This is the sync point of the node
+and the operators; the waits need the GPU operator, so they stay after stage 10. Because the node
+already exists in stage 10, the ClusterPolicy wait of the `gpu_operator` entry includes the driver
+build (about 6-11 minutes, timeout 1800 s). The ClusterPolicy is also `ready` with no GPU nodes
+(verified on OCP 4.22.14 with GPU operator v26.7.0), so the order works when the node is slow.
+With `gpu_nodes_managed: false` the GPU nodes come from outside (for example an RHDP catalog item with GPUs): stage 20 does not
 create them and the preflight fails if there are none.
 
 **Operators pre-installed by the platform (`allow_newer_installed`).** RHDP clusters already have some
@@ -229,7 +236,8 @@ The same contract is in `gitops/AGENTS.md` §2. Keep both in sync.
   (host `router.<apps domain>`, `haproxy.router.openshift.io/timeout: 10m`), the idle timeout of the
   ingress AWS load balancer (10m), Kuadrant + Authorino TLS,
   GPU nodes, the namespaces `local-models` and `maas-routing`, the External Secrets Operator, the
-  `ClusterSecretStore` and its source Secrets (namespace `sovereign-selfheal-secrets`), the Argo CD settings, the root Application.
+  `ClusterSecretStore` and its source Secrets (namespace `sovereign-selfheal-secrets`), the model image
+  pre-pull DaemonSets (namespace `sovereign-selfheal-prepull`), the Argo CD settings, the root Application.
   `gitops`: every object inside `local-models` and `maas-routing`.
 - **Namespaces** `local-models` and `maas-routing` carry `argocd.argoproj.io/managed-by: openshift-gitops`
   (the default Argo CD instance manages only labelled namespaces), and `local-models` also
@@ -258,6 +266,11 @@ Do **not** add here:
 - Demo narrative/lab guide → `showroom` repo.
 
 If a task seems to require adding a workload manifest here, stop and explain why it cannot live in `gitops` instead of adding it.
+
+Known exception: the pre-pull DaemonSets of `roles/model_prepull`. They are a node prerequisite (an image
+cache), not a demo workload, and they must exist before Argo CD and before the operators are installed,
+so they cannot come from the gitops repo. Their images must match `localModel.profiles` in
+`gitops/bootstrap/values.yaml`; the role warns after the seed when they differ.
 
 ## 9. When in doubt
 

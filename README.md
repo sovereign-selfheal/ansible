@@ -7,8 +7,9 @@ Read [`AGENTS.md`](AGENTS.md) before changing anything.
 | Stage | Playbook | Status |
 |---|---|---|
 | Preflight (reachability, OCP 4.22, default StorageClass, catalogs, external GPU nodes) | `playbooks/00-preflight.yml` | done |
+| Early nodes: GPU MachineSets without waiting ([`roles/gpu_node_prep`](roles/gpu_node_prep/README.md)), pre-pull of the model images ([`roles/model_prepull`](roles/model_prepull/README.md)) | `playbooks/05-early-nodes.yml` | done |
 | Operators (OLM, pinned CSV, Manual approval) | `playbooks/10-operators.yml` | done |
-| Cluster prerequisites: inference Gateway and Route ([`roles/ingress_gateway`](roles/ingress_gateway/README.md)), secret values for ESO ([`roles/secrets_bootstrap`](roles/secrets_bootstrap/README.md)), GPU MachineSets ([`roles/gpu_node_prep`](roles/gpu_node_prep/README.md)) | `playbooks/20-prereqs.yml` | done |
+| Cluster prerequisites: inference Gateway and Route ([`roles/ingress_gateway`](roles/ingress_gateway/README.md)), secret values for ESO ([`roles/secrets_bootstrap`](roles/secrets_bootstrap/README.md)), wait for the GPU nodes ([`roles/gpu_node_prep`](roles/gpu_node_prep/README.md)) | `playbooks/20-prereqs.yml` | done |
 | GitOps seed: namespaces, Argo CD health checks, root Application ([`roles/argocd_seed`](roles/argocd_seed/README.md)) | `playbooks/30-gitops-seed.yml` | done |
 | Teardown | `playbooks/99-destroy.yml` | todo |
 
@@ -138,6 +139,56 @@ localhost                  : ok=...  changed=0    unreachable=0    failed=0    s
 The last task prints the pinned CSV of each operator. It also lists any **unapproved** InstallPlan
 that OLM created for a newer version. These plans are never approved automatically. To upgrade,
 change `channel`/`starting_csv` in `group_vars/all/main.yml` and run the playbook again.
+
+## Model image pre-pull and GPU disk
+
+On a new cluster the model pod used to pull its images only at the end: after the operators, the
+GPU driver and the Argo CD sync, and one image after the other. Measured on 2026-09-26: modelcar
+(Granite, 16 GB) 12m12s, then vLLM CUDA 5m08s. The changes below aim to shorten this; the gain on
+a new cluster is not measured yet (see the limits below):
+
+- **The GPU node starts in parallel with the operators.** `05-early-nodes.yml` creates the GPU
+  MachineSets without waiting, so AWS builds the node while `10-operators.yml` runs.
+  `20-prereqs.yml` then waits for the node (Running, Ready, `nvidia.com/gpu`, ClusterPolicy
+  `ready`): this is the sync point of the two. Since the node exists during stage 10, the
+  ClusterPolicy wait of the GPU operator now includes the driver build (about 6-11 minutes,
+  within its 1800 s timeout).
+- **The model images are pulled early and in parallel.** `05-early-nodes.yml` also creates one
+  DaemonSet per image (`roles/model_prepull`, namespace `sovereign-selfheal-prepull`). The pull
+  starts as soon as the GPU node joins. Before the seed, `30-gitops-seed.yml` reports the pull
+  (it does not wait: the model pod joins a pull in progress); after the seed it warns if the
+  model uses other images than the pre-pulled ones.
+- **Bigger GPU disk.** The GPU root disk is 200 GiB (was 100 GiB, 57% full after the first pull).
+  This applies only to new Machines: scale the GPU MachineSet to 0 and back to 1 on an existing
+  cluster (see [`roles/gpu_node_prep`](roles/gpu_node_prep/README.md)).
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `model_prepull_enabled` | `true` | Pre-pull the model images |
+| `model_prepull_images` | current digests | Must match `localModel.profiles` in `gitops/bootstrap/values.yaml` |
+| `gpu_node_prep_volume_size` | `200` | GPU root disk (GiB) |
+| `gpu_node_prep_volume_iops` / `_throughput` | `""` | Empty = gp3 baseline (3000 IOPS, 125 MB/s) |
+
+Limits, measured on 2026-09-26 with a new GPU node (operators already installed):
+
+- The download itself does not get faster: the Granite modelcar is one gzip layer of 16 GB.
+  Alone it took 12m12s; in parallel with vLLM the node bandwidth is shared, so both images
+  together took 16m25s (vs 17m20s one after the other).
+- **The NVIDIA container toolkit restarts CRI-O** (`systemctl restart crio`) when the driver is
+  ready, about 9 minutes after the node joins. The restart stops every pull in progress, and
+  the pull starts again from zero (the 16 GB layer is not resumed). A pull that has not finished
+  before the restart gains nothing; the pre-pull then restarts at once, still before the seed.
+- The model pod joins a pull in progress (the modelcar was ready 12 s after the pre-pull) and
+  finds the finished images (`already present on machine`).
+
+To measure the effect, compare the `Pulling` -> `Pulled` events of the pre-pull pods and of the
+model pod on a new cluster:
+
+```bash
+oc get events -n sovereign-selfheal-prepull --sort-by=.lastTimestamp | grep -E 'Pulling|Pulled'
+oc get events -n local-models --sort-by=.lastTimestamp | grep -E 'Pulling|Pulled'
+# with the pre-pull the model pod shows: Container image "..." already present on machine
+```
 
 ## Lint (also run by CI on every PR)
 

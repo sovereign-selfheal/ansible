@@ -9,6 +9,16 @@ gpu_node_prep_zones: []
 gpu_node_prep_active_zone_count: 1
 gpu_node_prep_replicas: 1                       # per active zone; 0 scales every GPU MachineSet down
 
+# Root disk of the GPU nodes (EBS). The model images need space: after the first pull of
+# Granite and vLLM a 100 GiB disk was 57% full, and the kubelet deletes unused images at 85%.
+# Changes apply only to new Machines: scale the MachineSet to 0 and back to 1.
+gpu_node_prep_volume_size: 200                  # GiB
+gpu_node_prep_volume_type: gp3
+# Empty: the gp3 baseline (3000 IOPS, 125 MB/s). The image download (about 22 MB/s from
+# quay.io) is slower than the baseline disk, so raise these only if a measurement shows the disk.
+gpu_node_prep_volume_iops: ""
+gpu_node_prep_volume_throughput: ""             # MB/s, gp3 only
+
 # Labels and taints for the GPU nodes. The taint keeps non-GPU workloads away; the NVIDIA
 # daemonsets tolerate it by default, GPU workloads must tolerate it.
 gpu_node_prep_node_labels:
@@ -18,6 +28,9 @@ gpu_node_prep_taints:
     value: "true"
     effect: NoSchedule
 
+# false: only create or scale the MachineSets (playbooks/05-early-nodes.yml); the waits
+# below run later in playbooks/20-prereqs.yml.
+gpu_node_prep_wait: true
 # Wait for machines to be Running (or gone, when scaling down).
 gpu_node_prep_timeout: 1500
 # Then wait until every GPU node exposes nvidia.com/gpu (NVIDIA driver built and device
