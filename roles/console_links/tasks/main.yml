@@ -1,0 +1,40 @@
+---
+- name: Add the trace links to the console menu
+  ansible.builtin.debug:
+    msg: >-
+      {{ console_links_traces | length }} ConsoleLinks in section '{{ console_links_section }}'
+      -> Tempo {{ console_links_tempo_namespace }}/{{ console_links_tempo_name }}, tenant {{ console_links_tempo_tenant }}
+
+- name: Read the console URL of the cluster
+  kubernetes.core.k8s_info:
+    api_version: config.openshift.io/v1
+    kind: Console
+    name: cluster
+  register: console_links_console
+
+- name: Ensure the ConsoleLinks
+  vars:
+    console_links_url: "{{ (console_links_console.resources | first).status.consoleURL }}"
+    console_links_params:
+      namespace: "{{ console_links_tempo_namespace }}"
+      name: "{{ console_links_tempo_name }}"
+      tenant: "{{ console_links_tempo_tenant }}"
+      q: "{{ console_links_item.query }}"
+      limit: "{{ console_links_limit }}"
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: console.openshift.io/v1
+      kind: ConsoleLink
+      metadata:
+        name: "{{ console_links_item.name }}"
+      spec:
+        location: ApplicationMenu
+        text: "{{ console_links_item.text }}"
+        href: "{{ console_links_url }}/observe/traces?{{ console_links_params | urlencode }}"
+        applicationMenu:
+          section: "{{ console_links_section }}"
+  loop: "{{ console_links_traces }}"
+  loop_control:
+    loop_var: console_links_item
+    label: "{{ console_links_item.name }}"
