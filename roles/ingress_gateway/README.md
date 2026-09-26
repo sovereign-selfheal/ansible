@@ -7,7 +7,7 @@ AuthPolicy and TokenRateLimitPolicy that attach to this Gateway are in the gitop
 
 | Object | Details |
 |---|---|
-| ConfigMap `openshift-ai-inference-config` | Makes the generated Gateway Service `ClusterIP` (no extra load balancer) |
+| ConfigMap `openshift-ai-inference-config` | Makes the generated Gateway Service `ClusterIP` (no extra load balancer), fixes the gateway pods at 2 (no HPA scale-down) and lets a stopping pod finish the requests in flight (drain 600 s) |
 | Gateway `openshift-ai-inference` | Class `openshift-default` (created by the `rhcl` entry of `olm_operator`), HTTPS listener `*.<apps domain>` with the ingress certificate |
 | Route `maas-router` | Host `router.<apps domain>`, TLS passthrough to the Gateway Service, timeout 10m |
 | IngressController `default` (AWS Classic LB only) | Load balancer idle timeout 10m instead of the AWS default 60s; the load balancer is updated in place |
@@ -33,6 +33,8 @@ not recreated. Clients should still prefer streaming.
 | `ingress_gateway_route_name` | `maas-router` | Route name |
 | `ingress_gateway_route_timeout` | `10m` | Router timeout |
 | `ingress_gateway_lb_idle_timeout` | `10m` | Idle timeout of the AWS Classic load balancer; empty = no change |
+| `ingress_gateway_min_replicas` / `_max_replicas` | `2` / `2` | Gateway pods (HPA bounds). The GatewayClass default 2-10 scaled up on a few requests and cut long answers on scale-down |
+| `ingress_gateway_drain_seconds` | `600` | Time a stopping gateway pod keeps serving the requests in flight (Istio `terminationDrainDuration`) |
 | `ingress_gateway_apps_domain` | `""` | Override of the apps domain |
 | `ingress_gateway_cert_secret` | `""` | Override of the certificate Secret |
 | `ingress_gateway_timeout` | `600` | Seconds to wait for the Gateway `Programmed` condition |

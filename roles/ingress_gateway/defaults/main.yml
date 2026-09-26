@@ -15,6 +15,14 @@ ingress_gateway_route_timeout: 10m
 # default is 60s: without streaming no byte flows until the answer is complete, so longer
 # answers were cut at 60s. Applied only on AWS with a Classic load balancer; empty = no change.
 ingress_gateway_lb_idle_timeout: 10m
+# Gateway pods. The GatewayClass default is an HPA 2-10 on 80% of a 100m CPU request: a few
+# requests scaled it to 10, and the scale-down 5 minutes later cut the answers in flight.
+# Same min and max = fixed replicas.
+ingress_gateway_min_replicas: 2
+ingress_gateway_max_replicas: 2
+# A stopping gateway pod keeps serving the requests in flight for this time (seconds).
+# Same value as ingress_gateway_route_timeout.
+ingress_gateway_drain_seconds: 600
 
 # Empty: read from the cluster (ingresses.config/cluster and the default IngressController).
 ingress_gateway_apps_domain: ""

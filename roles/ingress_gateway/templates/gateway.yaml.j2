@@ -1,6 +1,8 @@
 ---
 # The Gateway Service is ClusterIP: traffic enters through the passthrough Route
 # below, so the existing *.apps DNS and certificate are reused on every platform.
+# Fixed replicas and a long drain: a gateway pod that stops (HPA scale-down, rollout,
+# node drain) must not cut a long LLM answer that is still in flight.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -10,6 +12,25 @@ data:
   service: |
     spec:
       type: ClusterIP
+  horizontalPodAutoscaler: |
+    spec:
+      minReplicas: {{ ingress_gateway_min_replicas }}
+      maxReplicas: {{ ingress_gateway_max_replicas }}
+  deployment: |
+    spec:
+      template:
+        metadata:
+          annotations:
+            proxy.istio.io/config: |
+              terminationDrainDuration: {{ ingress_gateway_drain_seconds }}s
+        spec:
+          terminationGracePeriodSeconds: {{ ingress_gateway_drain_seconds | int + 30 }}
+          containers:
+            - name: istio-proxy
+              env:
+                # stop as soon as the requests in flight are done, not after the full drain
+                - name: EXIT_ON_ZERO_ACTIVE_CONNECTIONS
+                  value: "true"
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
