@@ -1,0 +1,13 @@
+---
+# user_workload_monitoring: Prometheus for the user namespaces, so that the ServiceMonitors of
+# the gitops repo (router metrics, vLLM metrics) are scraped.
+
+# ConfigMap of the platform monitoring. RHDP may already ship one: the role changes only the key
+# enableUserWorkload of config.yaml and keeps every other setting.
+user_workload_monitoring_config_namespace: openshift-monitoring
+user_workload_monitoring_config_name: cluster-monitoring-config
+# Namespace where the monitoring operator starts the user workload Prometheus.
+user_workload_monitoring_namespace: openshift-user-workload-monitoring
+# Seconds to wait for the user workload Prometheus.
+user_workload_monitoring_timeout: 600
+user_workload_monitoring_poll_delay: 10

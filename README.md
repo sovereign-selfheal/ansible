@@ -9,7 +9,7 @@ Read [`AGENTS.md`](AGENTS.md) before changing anything.
 | Preflight (reachability, OCP 4.22, default StorageClass, catalogs, external GPU nodes) | `playbooks/00-preflight.yml` | done |
 | Early nodes: GPU MachineSets without waiting ([`roles/gpu_node_prep`](roles/gpu_node_prep/README.md)), pre-pull of the model images ([`roles/model_prepull`](roles/model_prepull/README.md)) | `playbooks/05-early-nodes.yml` | done |
 | Operators (OLM, pinned CSV, Manual approval) | `playbooks/10-operators.yml` | done |
-| Cluster prerequisites: inference Gateway and Route ([`roles/ingress_gateway`](roles/ingress_gateway/README.md)), secret values for ESO ([`roles/secrets_bootstrap`](roles/secrets_bootstrap/README.md)), wait for the GPU nodes ([`roles/gpu_node_prep`](roles/gpu_node_prep/README.md)) | `playbooks/20-prereqs.yml` | done |
+| Cluster prerequisites: inference Gateway and Route ([`roles/ingress_gateway`](roles/ingress_gateway/README.md)), secret values for ESO ([`roles/secrets_bootstrap`](roles/secrets_bootstrap/README.md)), user workload monitoring ([`roles/user_workload_monitoring`](roles/user_workload_monitoring/README.md)), wait for the GPU nodes ([`roles/gpu_node_prep`](roles/gpu_node_prep/README.md)) | `playbooks/20-prereqs.yml` | done |
 | GitOps seed: namespaces, Argo CD health checks, root Application ([`roles/argocd_seed`](roles/argocd_seed/README.md)) | `playbooks/30-gitops-seed.yml` | done |
 | Teardown | `playbooks/99-destroy.yml` | todo |
 
@@ -30,8 +30,11 @@ Declared in `group_vars/all/main.yml` (`operators`) and installed in this order 
 | `rhoai` | rhods-operator | redhat-operators | redhat-ods-operator | stable-3.5 | rhods-operator.3.5.1 | yes |
 | `nfd` | nfd | redhat-operators | openshift-nfd | stable | nfd.4.22.0-202609151747 | `gpu_enabled` |
 | `gpu_operator` | gpu-operator-certified | certified-operators | nvidia-gpu-operator | v26.7 | gpu-operator-certified.v26.7.0 | `gpu_enabled` |
+| `opentelemetry` | opentelemetry-product (Red Hat build of OpenTelemetry) | redhat-operators | openshift-opentelemetry-operator | stable | opentelemetry-operator.v0.158.0-2 | `observability_enabled` |
+| `tempo` | tempo-product (Tempo Operator) | redhat-operators | openshift-tempo-operator | stable | tempo-operator.v0.22.0-2 | `observability_enabled` |
+| `cluster_observability` | cluster-observability-operator (+ UIPlugin `distributed-tracing`) | redhat-operators | openshift-cluster-observability-operator | stable | cluster-observability-operator.v1.5.2 | `observability_enabled` |
 
-Pins were resolved on OCP 4.22.14 on 2026-09-23. To refresh them against a cluster:
+Pins were resolved on OCP 4.22.14 on 2026-09-23; the three observability operators on 2026-09-26. To refresh them against a cluster:
 
 ```bash
 scripts/resolve-operator-versions.sh                 # all packages used here
@@ -189,6 +192,34 @@ oc get events -n sovereign-selfheal-prepull --sort-by=.lastTimestamp | grep -E '
 oc get events -n local-models --sort-by=.lastTimestamp | grep -E 'Pulling|Pulled'
 # with the pre-pull the model pod shows: Container image "..." already present on machine
 ```
+
+## Observability (traces and metrics of the router)
+
+The demo shows each routing decision as a trace (console: *Observe → Traces*) and as metrics
+(*Observe → Metrics*). This repo prepares the cluster side; the gitops repo deploys the rest.
+
+| Item | Where | Variable |
+|---|---|---|
+| Operators: Red Hat build of OpenTelemetry, Tempo Operator, Cluster Observability Operator | `group_vars/all/main.yml` (`operators`) | `observability_enabled` (default `true`) |
+| Console plugin `UIPlugin/distributed-tracing` (cluster-scoped) | post-install of `cluster_observability` | `observability_enabled` |
+| Tempo tenant write permission for the collector (ClusterRole + binding `tempo-traces-write-router`) | post-install of `tempo` | `observability_tempo_tenant`, `observability_collector_service_account` |
+| Namespace `observability` (label `argocd.argoproj.io/managed-by`) | `roles/argocd_seed` | always created |
+| Argo CD health check for `TempoMonolithic` | `roles/argocd_seed/files/health-tempo.lua` | always |
+| User workload monitoring (`enableUserWorkload: true`) | `roles/user_workload_monitoring` | `user_workload_monitoring_enabled` (default `true`) |
+
+The seed passes `observability.enabled` (from `observability_enabled`) and `namespaces.observability`
+to the root Application. The gitops repo then deploys the Tempo instance `tempo` (TempoMonolithic) and
+the OpenTelemetry collector `otel` (OTLP on `otel-collector.observability.svc:4318`) in the namespace
+`observability`. Tempo runs with multi-tenancy in `openshift` mode (the supported setup on OpenShift):
+the collector writes the tenant `router` with its service account token, and a user needs the read
+permission on the tenant to see the traces (cluster-admin has it). Traces and metrics stay in the
+cluster: nothing is sent outside.
+
+With `observability_enabled: false` the three operators are not installed and the gitops repo deploys
+no Tempo instance and no collector; the router still works and still exposes its metrics.
+
+> **Support status:** the OpenTelemetry collector image comes from the Red Hat build of OpenTelemetry.
+> LiteLLM, which sends the traces of the router, is community software, not supported by Red Hat.
 
 ## Lint (also run by CI on every PR)
 

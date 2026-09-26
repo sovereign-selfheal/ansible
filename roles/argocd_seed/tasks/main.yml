@@ -4,7 +4,8 @@
     msg: >-
       Root Application {{ argocd_seed_namespace }}/{{ argocd_seed_app_name }} ->
       {{ argocd_seed_repo_url }}@{{ argocd_seed_revision }}:{{ argocd_seed_path }},
-      model profile {{ argocd_seed_model_profile }}, secret store enabled {{ argocd_seed_secret_store_enabled }}
+      model profile {{ argocd_seed_model_profile }}, secret store enabled {{ argocd_seed_secret_store_enabled }},
+      observability enabled {{ argocd_seed_observability_enabled }}
 
 - name: Decide the routing mode
   vars:
@@ -68,6 +69,8 @@
                    'reasoning': argocd_seed_sota_reasoning | bool},
           'secretStore': {'enabled': argocd_seed_secret_store_enabled | bool},
           'classifier': {'mode': argocd_seed_classifier_mode},
+          'observability': {'enabled': argocd_seed_observability_enabled | bool},
+          'namespaces': {'observability': argocd_seed_observability_namespace},
           'repo': {'url': argocd_seed_repo_url, 'targetRevision': argocd_seed_revision}}
          | combine(argocd_seed_extra_values, recursive=true) }}
 

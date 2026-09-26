@@ -28,6 +28,9 @@ DEFAULT_PACKAGES=(
   rhods-operator:redhat-operators
   nfd:redhat-operators
   gpu-operator-certified:certified-operators
+  opentelemetry-product:redhat-operators
+  tempo-product:redhat-operators
+  cluster-observability-operator:redhat-operators
 )
 
 command -v oc >/dev/null 2>&1 || { echo "ERROR: oc not found in PATH" >&2; exit 2; }

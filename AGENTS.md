@@ -54,6 +54,7 @@ Target platform: **demo.redhat.com** (RHDP). The code must be structured so that
 │   ├── model_prepull/          # pre-pull DaemonSets of the local model images
 │   ├── ingress_gateway/        # RHOAI inference Gateway + passthrough Route (contract with gitops)
 │   ├── secrets_bootstrap/      # secret values for ESO + ClusterSecretStore (provider kubernetes)
+│   ├── user_workload_monitoring/  # enableUserWorkload in cluster-monitoring-config (merged, idempotent)
 │   └── argocd_seed/
 ├── scripts/
 │   ├── resolve-operator-versions.sh   # prints package/channel/currentCSV on the target cluster
@@ -89,8 +90,13 @@ oc get packagemanifests -n openshift-marketplace <package> \
 | `rhoai` | Red Hat OpenShift AI | `rhods-operator` | `redhat-ods-operator` | `stable-3.5` | Creates `DataScienceCluster` (v2) with KServe; model serving (vLLM) itself is deployed by GitOps |
 | `nfd` | Node Feature Discovery | `nfd` | `openshift-nfd` | `stable` (only channel, tracks the OCP minor) | Only when `gpu_enabled: true`; required by the GPU operator. OwnNamespace OperatorGroup. Installed before the GPU nodes exist (see §3 "GPU nodes") |
 | `gpu_operator` | NVIDIA GPU Operator | `gpu-operator-certified` (catalog `certified-operators`) | `nvidia-gpu-operator` | `v26.7` | Only when `gpu_enabled: true`; needed by in-cluster vLLM. OwnNamespace OperatorGroup |
+| `opentelemetry` | Red Hat build of OpenTelemetry | `opentelemetry-product` | `openshift-opentelemetry-operator` | `stable` (only channel) | Only when `observability_enabled: true`. The collector itself is deployed by GitOps |
+| `tempo` | Tempo Operator | `tempo-product` | `openshift-tempo-operator` | `stable` (only channel) | Only when `observability_enabled: true`. The Tempo instance is deployed by GitOps |
+| `cluster_observability` | Cluster Observability Operator | `cluster-observability-operator` | `openshift-cluster-observability-operator` | `stable` | Only when `observability_enabled: true`. Post-install: `UIPlugin/distributed-tracing` (console *Observe → Traces*) |
 
-Verified on OCP 4.22.14 on 2026-09-23; pinned CSVs are in `group_vars/all/main.yml`.
+Verified on OCP 4.22.14 on 2026-09-23 (the three observability operators on 2026-09-26); pinned CSVs
+are in `group_vars/all/main.yml`. The observability operators have AllNamespaces as the only install
+mode and each one gets its own namespace, not `openshift-operators` (see the Manual approval note there).
 
 **Not installed: OpenShift Service Mesh and OpenShift Serverless.** RHOAI 3.5 serves models with KServe in
 `Standard` mode (the former RawDeployment), which needs neither Knative nor a mesh, so they are not in the
@@ -237,21 +243,34 @@ The same contract is in `gitops/AGENTS.md` §2. Keep both in sync.
   ingress AWS load balancer (10m), Kuadrant + Authorino TLS,
   GPU nodes, the namespaces `local-models` and `maas-routing`, the External Secrets Operator, the
   `ClusterSecretStore` and its source Secrets (namespace `sovereign-selfheal-secrets`), the model image
-  pre-pull DaemonSets (namespace `sovereign-selfheal-prepull`), the Argo CD settings, the root Application.
-  `gitops`: every object inside `local-models` and `maas-routing`.
-- **Namespaces** `local-models` and `maas-routing` carry `argocd.argoproj.io/managed-by: openshift-gitops`
+  pre-pull DaemonSets (namespace `sovereign-selfheal-prepull`), the Argo CD settings, the root Application,
+  the observability operators (OpenTelemetry, Tempo, Cluster Observability), the `UIPlugin`
+  `distributed-tracing`, the Tempo tenant write permission (ClusterRole + ClusterRoleBinding
+  `tempo-traces-write-<tenant>`), the namespace `observability`, user workload monitoring
+  (`enableUserWorkload` in `cluster-monitoring-config`).
+  `gitops`: every object inside `local-models`, `maas-routing` and `observability`.
+- **Namespaces** `local-models`, `maas-routing` and `observability` carry `argocd.argoproj.io/managed-by: openshift-gitops`
   (the default Argo CD instance manages only labelled namespaces), and `local-models` also
   `opendatahub.io/dashboard: "true"` and `modelmesh-enabled: "false"`.
 - **Root Application** (`30-gitops-seed.yml`): path `bootstrap` of the gitops repo, with `helm.valuesObject`:
   `appsDomain` (from `ingresses.config/cluster`), `modelProfile` (`gpu` when `gpu_enabled`, else `cpu`),
   `sota.enabled`, `sota.apiBase`, `sota.model`, `sota.servedMatch`, `sota.reasoning` (`sota_reasoning`, default
   `false`: no reasoning), `secretStore.enabled`, `classifier.mode`
-  (`classifier_mode`: `local` = the local model classifies, default; `external`; `off`).
+  (`classifier_mode`: `local` = the local model classifies, default; `external`; `off`),
+  `observability.enabled` (`observability_enabled`, default `true`), `namespaces.observability`.
+- **Observability**: `gitops` deploys the Tempo instance `tempo` (kind `TempoMonolithic`, multi-tenancy
+  `openshift`, tenant `router`) and the OpenTelemetry collector `otel` (kind `OpenTelemetryCollector`; the
+  operator names its Service and ServiceAccount `otel-collector`) in the namespace `observability`. OTLP
+  http on `otel-collector.observability.svc:4318`, grpc on `:4317`. This repo lets that ServiceAccount write
+  the tenant (`observability_tempo_tenant`, `observability_collector_service_account`): keep the names
+  equal in both repos. The `UIPlugin` of this repo finds the Tempo instance by itself. With
+  `observability_enabled: false` the operators are not installed and `gitops` deploys neither.
 - **SOTA model**: its settings and key come from `group_vars/all/vault.yml` (ansible-vault, not tracked) or
   from AgnosticV. All three of `sota_api_base`, `sota_model`, `sota_api_key` = hybrid routing; none =
   **local-only mode** (`sota.enabled: false`, every request goes to the local model); some = error.
 - **Argo CD health checks** on the ArgoCD CR: `argoproj.io/Application` (sync waves between components),
-  `serving.kserve.io/InferenceService`, Kuadrant `AuthPolicy` and `TokenRateLimitPolicy`.
+  `serving.kserve.io/InferenceService`, Kuadrant `AuthPolicy` and `TokenRateLimitPolicy`, Tempo
+  `TempoMonolithic` (Argo CD 3.4 already knows `OpenTelemetryCollector`).
 - **Secrets** are managed by the External Secrets Operator. `roles/secrets_bootstrap` lands the values from
   `vault.yml` (or AgnosticV) in Secrets of the namespace `sovereign-selfheal-secrets` and creates the
   `ClusterSecretStore` `sovereign-selfheal` (provider `kubernetes`) that ESO reads. A different backend later

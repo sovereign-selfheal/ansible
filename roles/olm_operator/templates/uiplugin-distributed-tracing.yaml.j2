@@ -1,0 +1,10 @@
+---
+# Cluster Observability Operator: console plugin for Observe -> Traces. The plugin finds the
+# Tempo instances of the cluster by itself (the CR has no field that selects one); the gitops
+# repo deploys TempoMonolithic `tempo` in the namespace observability (see AGENTS.md §7).
+apiVersion: observability.openshift.io/v1alpha1
+kind: UIPlugin
+metadata:
+  name: {{ name }}
+spec:
+  type: DistributedTracing
