@@ -432,3 +432,13 @@ operators:
           kind: UIPlugin
           name: distributed-tracing
           condition: {type: Available, status: "True"}
+      # Perses dashboards in the console (Observe -> Dashboards): the gitops repo adds the
+      # dashboard of the routing decisions.
+      - template: uiplugin-monitoring-perses.yaml.j2
+        vars:
+          name: monitoring
+        wait:
+          api_version: observability.openshift.io/v1alpha1
+          kind: UIPlugin
+          name: monitoring
+          condition: {type: Available, status: "True"}

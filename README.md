@@ -202,6 +202,7 @@ The demo shows each routing decision as a trace (console: *Observe → Traces*) 
 |---|---|---|
 | Operators: Red Hat build of OpenTelemetry, Tempo Operator, Cluster Observability Operator | `group_vars/all/main.yml` (`operators`) | `observability_enabled` (default `true`) |
 | Console plugin `UIPlugin/distributed-tracing` (cluster-scoped) | post-install of `cluster_observability` | `observability_enabled` |
+| Perses dashboards in the console, `UIPlugin/monitoring` (cluster-scoped; the dashboard itself is in the gitops repo) | post-install of `cluster_observability` | `observability_enabled` |
 | Tempo tenant write permission for the collector (ClusterRole + binding `tempo-traces-write-router`) | post-install of `tempo` | `observability_tempo_tenant`, `observability_collector_service_account` |
 | Namespace `observability` (label `argocd.argoproj.io/managed-by`) | `roles/argocd_seed` | always created |
 | Argo CD health check for `TempoMonolithic` | `roles/argocd_seed/files/health-tempo.lua` | always |

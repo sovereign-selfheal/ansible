@@ -93,7 +93,7 @@ oc get packagemanifests -n openshift-marketplace <package> \
 | `gpu_operator` | NVIDIA GPU Operator | `gpu-operator-certified` (catalog `certified-operators`) | `nvidia-gpu-operator` | `v26.7` | Only when `gpu_enabled: true`; needed by in-cluster vLLM. OwnNamespace OperatorGroup |
 | `opentelemetry` | Red Hat build of OpenTelemetry | `opentelemetry-product` | `openshift-opentelemetry-operator` | `stable` (only channel) | Only when `observability_enabled: true`. The collector itself is deployed by GitOps |
 | `tempo` | Tempo Operator | `tempo-product` | `openshift-tempo-operator` | `stable` (only channel) | Only when `observability_enabled: true`. The Tempo instance is deployed by GitOps |
-| `cluster_observability` | Cluster Observability Operator | `cluster-observability-operator` | `openshift-cluster-observability-operator` | `stable` | Only when `observability_enabled: true`. Post-install: `UIPlugin/distributed-tracing` (console *Observe → Traces*) |
+| `cluster_observability` | Cluster Observability Operator | `cluster-observability-operator` | `openshift-cluster-observability-operator` | `stable` | Only when `observability_enabled: true`. Post-install: `UIPlugin/distributed-tracing` (console *Observe → Traces*), `UIPlugin/monitoring` with Perses (console *Observe → Dashboards*) |
 
 Verified on OCP 4.22.14 on 2026-09-23 (the three observability operators on 2026-09-26); pinned CSVs
 are in `group_vars/all/main.yml`. The observability operators have AllNamespaces as the only install
@@ -245,8 +245,8 @@ The same contract is in `gitops/AGENTS.md` §2. Keep both in sync.
   GPU nodes, the namespaces `local-models` and `maas-routing`, the External Secrets Operator, the
   `ClusterSecretStore` and its source Secrets (namespace `sovereign-selfheal-secrets`), the model image
   pre-pull DaemonSets (namespace `sovereign-selfheal-prepull`), the Argo CD settings, the root Application,
-  the observability operators (OpenTelemetry, Tempo, Cluster Observability), the `UIPlugin`
-  `distributed-tracing`, the Tempo tenant write permission (ClusterRole + ClusterRoleBinding
+  the observability operators (OpenTelemetry, Tempo, Cluster Observability), the `UIPlugin`s
+  `distributed-tracing` and `monitoring` (Perses), the Tempo tenant write permission (ClusterRole + ClusterRoleBinding
   `tempo-traces-write-<tenant>`), the console menu links to the router traces (`ConsoleLink`
   `sovereign-traces-*`), the namespace `observability`, user workload monitoring
   (`enableUserWorkload` in `cluster-monitoring-config`).
