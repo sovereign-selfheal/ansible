@@ -22,6 +22,11 @@ argocd_seed_namespaces:
   - name: maas-routing
     labels:
       argocd.argoproj.io/managed-by: "{{ argocd_seed_namespace }}"
+  # Tempo and the OpenTelemetry collector (gitops component observability). Created also when
+  # observability_enabled is false: an empty namespace costs nothing and keeps the contract simple.
+  - name: "{{ argocd_seed_observability_namespace }}"
+    labels:
+      argocd.argoproj.io/managed-by: "{{ argocd_seed_namespace }}"
 
 # Values of the root Application (bootstrap/values.yaml in the gitops repo).
 argocd_seed_model_profile: "{{ 'gpu' if (gpu_enabled | default(true) | bool) else 'cpu' }}"
@@ -34,11 +39,15 @@ argocd_seed_sota_served_match: "{{ sota_served_match | default('') }}"
 argocd_seed_sota_reasoning: "{{ sota_reasoning | default(false) }}"
 argocd_seed_secret_store_enabled: "{{ secret_store_enabled | default(false) }}"
 argocd_seed_classifier_mode: "{{ classifier_mode | default('local') }}"
+# Traces (gitops component observability, value observability.enabled): true only when the
+# OpenTelemetry and Tempo operators are installed (observability_enabled).
+argocd_seed_observability_enabled: "{{ observability_enabled | default(true) }}"
+argocd_seed_observability_namespace: observability
 # Any other value of bootstrap/values.yaml, merged last (for example {tiers: [...]}).
 argocd_seed_extra_values: {}
 
-# Custom health checks on the ArgoCD CR (Argo CD already knows InferenceService and
-# ExternalSecret). They replace spec.resourceHealthChecks of the instance.
+# Custom health checks on the ArgoCD CR (Argo CD already knows InferenceService,
+# ExternalSecret and OpenTelemetryCollector). They replace spec.resourceHealthChecks of the instance.
 argocd_seed_health_checks:
   - group: argoproj.io
     kind: Application
@@ -49,6 +58,10 @@ argocd_seed_health_checks:
   - group: kuadrant.io
     kind: TokenRateLimitPolicy
     file: health-kuadrant-policy.lua
+  # Argo CD 3.4 (GitOps 1.21) has a built-in check for OpenTelemetryCollector, none for Tempo.
+  - group: tempo.grafana.com
+    kind: TempoMonolithic
+    file: health-tempo.lua
 
 # Wait until the root Application (and so every component) is Synced and Healthy.
 # With the gpu profile the first start of Granite takes about 26 minutes on a new GPU node

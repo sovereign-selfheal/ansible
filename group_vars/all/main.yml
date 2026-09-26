@@ -40,6 +40,15 @@ classifier_api_key: ""   # secret
 # The ClusterSecretStore exists when there is a SOTA key to land.
 secret_store_enabled: "{{ sota_api_key | length > 0 }}"
 
+# ----- Observability (traces and metrics of the router) -----------------------------
+# true: install the OpenTelemetry, Tempo and Cluster Observability operators and the
+# distributed tracing console plugin; the seed passes observability.enabled to the gitops repo,
+# which then deploys the Tempo instance and the collector. false: no traces, nothing installed.
+observability_enabled: true
+# User workload monitoring (roles/user_workload_monitoring): Prometheus scrapes the
+# ServiceMonitors of the demo namespaces (router metrics, vLLM metrics).
+user_workload_monitoring_enabled: true
+
 # ----- Post-install CR settings (rendered by roles/olm_operator/templates) ----
 gateway_class_name: openshift-default
 gateway_class_controller: openshift.io/gateway-controller/v1   # OCP 4.20+ controller name
@@ -355,3 +364,57 @@ operators:
           status_field: state
           value: ready
           timeout: 1800
+
+  # 7-9. Observability of the routing decisions (observability_enabled): traces in Tempo through
+  #      an OpenTelemetry collector, shown in the console (Observe -> Traces) by the COO UI plugin.
+  #      The Tempo instance and the collector are deployed by the gitops repo (namespace
+  #      observability, see AGENTS.md §7). Only a `stable` channel exists for the three packages;
+  #      the pin + Manual approval freeze the version. Own namespaces, not openshift-operators.
+  - key: opentelemetry
+    name: opentelemetry-product
+    namespace: openshift-opentelemetry-operator
+    namespace_cluster_monitoring: true
+    channel: stable                               # only channel
+    starting_csv: opentelemetry-operator.v0.158.0-2   # resolved on OCP 4.22.14 on 2026-09-26
+    source: redhat-operators
+    source_namespace: openshift-marketplace
+    install_plan_approval: Manual
+    create_operator_group: true
+    operator_group_all_namespaces: true           # AllNamespaces is the only supported install mode
+    enabled: "{{ observability_enabled }}"
+
+  - key: tempo
+    name: tempo-product
+    namespace: openshift-tempo-operator
+    namespace_cluster_monitoring: true
+    channel: stable                               # only channel
+    starting_csv: tempo-operator.v0.22.0-2        # resolved on OCP 4.22.14 on 2026-09-26
+    source: redhat-operators
+    source_namespace: openshift-marketplace
+    install_plan_approval: Manual
+    create_operator_group: true
+    operator_group_all_namespaces: true           # AllNamespaces is the only supported install mode
+    enabled: "{{ observability_enabled }}"
+
+  - key: cluster_observability
+    name: cluster-observability-operator
+    namespace: openshift-cluster-observability-operator
+    namespace_cluster_monitoring: true
+    channel: stable                               # `fast` offers the same CSV today
+    starting_csv: cluster-observability-operator.v1.5.2   # resolved on OCP 4.22.14 on 2026-09-26
+    source: redhat-operators
+    source_namespace: openshift-marketplace
+    install_plan_approval: Manual
+    create_operator_group: true
+    operator_group_all_namespaces: true           # AllNamespaces is the only supported install mode
+    enabled: "{{ observability_enabled }}"
+    post_install:
+      # Console plugin Observe -> Traces. It finds the Tempo instance of the gitops repo by itself.
+      - template: uiplugin-distributed-tracing.yaml.j2
+        vars:
+          name: distributed-tracing
+        wait:
+          api_version: observability.openshift.io/v1alpha1
+          kind: UIPlugin
+          name: distributed-tracing
+          condition: {type: Available, status: "True"}

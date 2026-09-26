@@ -2,6 +2,7 @@
 # Cluster prerequisites that GitOps cannot handle:
 # - the inference Gateway and its passthrough Route (roles/ingress_gateway);
 # - the secret values for the External Secrets Operator (roles/secrets_bootstrap);
+# - user workload monitoring, for the ServiceMonitors of the gitops repo (roles/user_workload_monitoring);
 # - the GPU MachineSets, when gpu_enabled and gpu_nodes_managed (roles/gpu_node_prep).
 #   05-early-nodes already created them; here the role waits for the GPU nodes (Running,
 #   Ready, nvidia.com/gpu, ClusterPolicy ready). This is the sync point of the node and the
@@ -23,6 +24,14 @@
         name: secrets_bootstrap
         apply:
           tags: [secrets_bootstrap]
+      tags: always
+
+    - name: Turn on user workload monitoring
+      ansible.builtin.include_role:
+        name: user_workload_monitoring
+        apply:
+          tags: [user_workload_monitoring]
+      when: user_workload_monitoring_enabled | bool
       tags: always
 
     - name: Create the GPU MachineSets

@@ -1,0 +1,67 @@
+---
+- name: Turn on user workload monitoring
+  ansible.builtin.debug:
+    msg: >-
+      enableUserWorkload: true in {{ user_workload_monitoring_config_namespace }}/{{ user_workload_monitoring_config_name }},
+      then wait for Prometheus in {{ user_workload_monitoring_namespace }}
+
+- name: Read the cluster monitoring configuration
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: ConfigMap
+    name: "{{ user_workload_monitoring_config_name }}"
+    namespace: "{{ user_workload_monitoring_config_namespace }}"
+  register: user_workload_monitoring_cm
+
+- name: Parse config.yaml
+  vars:
+    user_workload_monitoring_raw: >-
+      {{ ((user_workload_monitoring_cm.resources | first).data | default({})).get('config.yaml', '')
+         if user_workload_monitoring_cm.resources | length > 0 else '' }}
+  ansible.builtin.set_fact:
+    user_workload_monitoring_current: "{{ (user_workload_monitoring_raw | from_yaml) or {} }}"
+
+# Write only when the key is missing or false: an unchanged ConfigMap gives changed=0, and the
+# other settings of an existing config.yaml are kept.
+- name: Set enableUserWorkload, keep the other settings
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: "{{ user_workload_monitoring_config_name }}"
+        namespace: "{{ user_workload_monitoring_config_namespace }}"
+      data:
+        config.yaml: "{{ user_workload_monitoring_current | combine({'enableUserWorkload': true}) | to_nice_yaml(indent=2) }}"
+  when: not (user_workload_monitoring_current.enableUserWorkload | default(false) | bool)
+
+- name: Wait for the user workload Prometheus
+  when: not ansible_check_mode
+  block:
+    - name: Wait for the Prometheus operator of user workloads
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: prometheus-operator
+        namespace: "{{ user_workload_monitoring_namespace }}"
+        wait: true
+        wait_condition: {type: Available, status: "True"}
+        wait_sleep: "{{ user_workload_monitoring_poll_delay }}"
+        wait_timeout: "{{ user_workload_monitoring_timeout }}"
+
+    - name: Wait for the user workload Prometheus pods
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: StatefulSet
+        name: prometheus-user-workload
+        namespace: "{{ user_workload_monitoring_namespace }}"
+      register: user_workload_monitoring_sts
+      until:
+        - user_workload_monitoring_sts.resources | length == 1
+        - (user_workload_monitoring_sts.resources | first).status.readyReplicas | default(0) > 0
+        - >-
+          (user_workload_monitoring_sts.resources | first).status.readyReplicas | default(0)
+          == (user_workload_monitoring_sts.resources | first).spec.replicas
+      retries: "{{ ((user_workload_monitoring_timeout | int) / (user_workload_monitoring_poll_delay | int)) | round(0, 'ceil') | int }}"
+      delay: "{{ user_workload_monitoring_poll_delay }}"
