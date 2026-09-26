@@ -3,7 +3,7 @@
 #
 # Usage: scripts/run-playbook.sh <playbook> [ansible-playbook options]
 #   scripts/run-playbook.sh playbooks/site.yml
-#   scripts/run-playbook.sh playbooks/site.yml -e gpu_enabled=true
+#   scripts/run-playbook.sh playbooks/site.yml -e gpu_enabled=false   # CPU profile
 #
 # The vault (group_vars/all/vault.yml) holds the SOTA settings. The password file is
 # looked up in this order:

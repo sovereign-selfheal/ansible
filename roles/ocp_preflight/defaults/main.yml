@@ -9,7 +9,7 @@ ocp_preflight_require_default_storageclass: true
 # (gpu_nodes_managed false). A node counts as a GPU node if it matches the label selector
 # OR its instance type matches the regex (NFD/GPU operator labels may not exist yet).
 ocp_preflight_gpu_nodes_required: >-
-  {{ (gpu_enabled | default(false) | bool) and not (gpu_nodes_managed | default(true) | bool) }}
+  {{ (gpu_enabled | default(true) | bool) and not (gpu_nodes_managed | default(true) | bool) }}
 ocp_preflight_gpu_node_label_selector: nvidia.com/gpu.present=true
 ocp_preflight_gpu_instance_type_regex: '^(g4dn|g5|g6|g6e|gr6|p3|p4d|p4de|p5|p5e)\.'
 ocp_preflight_gpu_min_nodes: 1

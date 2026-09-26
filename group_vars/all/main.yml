@@ -9,8 +9,9 @@
 ocp_min_version: "4.22"
 
 # ----- GPU --------------------------------------------------------------------
-# Enables NFD + NVIDIA GPU operator (and their CRs) and the GPU nodes.
-gpu_enabled: false
+# Enables NFD + NVIDIA GPU operator (and their CRs) and the GPU nodes, and serves Granite on GPU.
+# false: CPU profile (a small model on CPU, no GPU node), for quick tests only.
+gpu_enabled: true
 # true: this repo creates the GPU nodes (roles/gpu_node_prep, playbooks/20-prereqs.yml),
 #       after the operators. The ClusterPolicy is Ready also with zero GPU nodes.
 # false: the GPU nodes come from outside (e.g. an RHDP catalog item with GPUs);

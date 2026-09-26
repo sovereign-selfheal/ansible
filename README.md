@@ -120,11 +120,12 @@ scripts/run-playbook.sh playbooks/site.yml   # hybrid routing with a vault, loca
 # a single operator
 scripts/run-playbook.sh playbooks/10-operators.yml --tags rhoai
 
-# with GPU: operators first, then the GPU MachineSets (one run, in this order)
-scripts/run-playbook.sh playbooks/site.yml -e gpu_enabled=true
+# the GPU profile is the default: operators first, then the GPU MachineSets (one run, in this order)
+# CPU profile for quick tests (small model on CPU, no GPU node):
+scripts/run-playbook.sh playbooks/site.yml -e gpu_enabled=false
 
 # end of the day: scale the GPU MachineSets to 0 (only stage 20, faster)
-scripts/run-playbook.sh playbooks/20-prereqs.yml -e gpu_enabled=true -e gpu_node_prep_replicas=0
+scripts/run-playbook.sh playbooks/20-prereqs.yml -e gpu_node_prep_replicas=0
 ```
 
 A second run must report `changed=0`:

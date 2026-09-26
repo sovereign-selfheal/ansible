@@ -4,7 +4,7 @@
 # - the secret values for the External Secrets Operator (roles/secrets_bootstrap);
 # - the GPU MachineSets, when gpu_enabled and gpu_nodes_managed (roles/gpu_node_prep).
 #   They run after 10-operators: the GPU wait needs the NVIDIA operator.
-# Scale every GPU MachineSet to 0:  -e gpu_enabled=true -e gpu_node_prep_replicas=0 --tags gpu_node_prep
+# Scale every GPU MachineSet to 0:  -e gpu_node_prep_replicas=0 --tags gpu_node_prep
 - name: Cluster prerequisites
   hosts: localhost
   gather_facts: false

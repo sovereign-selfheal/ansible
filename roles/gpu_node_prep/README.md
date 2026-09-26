@@ -47,13 +47,13 @@ works on a new cluster in a different region without changes.
 ```bash
 # create the MachineSets, one machine in the first zone (the GPU operator must be installed:
 # run site.yml, or 10-operators.yml before this)
-scripts/run-playbook.sh playbooks/20-prereqs.yml -e gpu_enabled=true
+scripts/run-playbook.sh playbooks/20-prereqs.yml
 
 # scale every GPU MachineSet to 0 (stops the EC2 costs, keeps the MachineSets)
-scripts/run-playbook.sh playbooks/20-prereqs.yml -e gpu_enabled=true -e gpu_node_prep_replicas=0
+scripts/run-playbook.sh playbooks/20-prereqs.yml -e gpu_node_prep_replicas=0
 
 # GPU in a specific zone, for example when the first zone has no capacity
-scripts/run-playbook.sh playbooks/20-prereqs.yml -e gpu_enabled=true -e '{"gpu_node_prep_zones": ["us-east-2b", "us-east-2a", "us-east-2c"]}'
+scripts/run-playbook.sh playbooks/20-prereqs.yml -e '{"gpu_node_prep_zones": ["us-east-2b", "us-east-2a", "us-east-2c"]}'
 ```
 
 ## Notes

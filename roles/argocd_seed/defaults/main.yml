@@ -24,7 +24,7 @@ argocd_seed_namespaces:
       argocd.argoproj.io/managed-by: "{{ argocd_seed_namespace }}"
 
 # Values of the root Application (bootstrap/values.yaml in the gitops repo).
-argocd_seed_model_profile: "{{ 'gpu' if (gpu_enabled | default(false) | bool) else 'cpu' }}"
+argocd_seed_model_profile: "{{ 'gpu' if (gpu_enabled | default(true) | bool) else 'cpu' }}"
 # Hybrid routing needs all three SOTA values (the key lands through roles/secrets_bootstrap).
 # None of them set = local-only mode. Only some of them set = error.
 argocd_seed_sota_api_key_set: "{{ (sota_api_key | default('')) | length > 0 }}"
