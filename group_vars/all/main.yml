@@ -45,6 +45,11 @@ secret_store_enabled: "{{ sota_api_key | length > 0 }}"
 # distributed tracing console plugin; the seed passes observability.enabled to the gitops repo,
 # which then deploys the Tempo instance and the collector. false: no traces, nothing installed.
 observability_enabled: true
+# Contract with the gitops repo (component observability): namespace, Tempo tenant and the
+# ServiceAccount of the collector `otel` (the operator names it otel-collector).
+observability_namespace: observability
+observability_tempo_tenant: router
+observability_collector_service_account: otel-collector
 # User workload monitoring (roles/user_workload_monitoring): Prometheus scrapes the
 # ServiceMonitors of the demo namespaces (router metrics, vLLM metrics).
 user_workload_monitoring_enabled: true
@@ -395,6 +400,15 @@ operators:
     create_operator_group: true
     operator_group_all_namespaces: true           # AllNamespaces is the only supported install mode
     enabled: "{{ observability_enabled }}"
+    post_install:
+      # Tempo runs with multi-tenancy (openshift mode, the supported setup): the collector of the
+      # gitops repo may write the router tenant. Readers need the matching read permission;
+      # cluster-admin has it already.
+      - template: tempo-tenant-rbac.yaml.j2
+        vars:
+          tenant: "{{ observability_tempo_tenant }}"
+          namespace: "{{ observability_namespace }}"
+          service_account: "{{ observability_collector_service_account }}"
 
   - key: cluster_observability
     name: cluster-observability-operator

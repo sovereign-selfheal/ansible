@@ -245,7 +245,8 @@ The same contract is in `gitops/AGENTS.md` §2. Keep both in sync.
   `ClusterSecretStore` and its source Secrets (namespace `sovereign-selfheal-secrets`), the model image
   pre-pull DaemonSets (namespace `sovereign-selfheal-prepull`), the Argo CD settings, the root Application,
   the observability operators (OpenTelemetry, Tempo, Cluster Observability), the `UIPlugin`
-  `distributed-tracing`, the namespace `observability`, user workload monitoring
+  `distributed-tracing`, the Tempo tenant write permission (ClusterRole + ClusterRoleBinding
+  `tempo-traces-write-<tenant>`), the namespace `observability`, user workload monitoring
   (`enableUserWorkload` in `cluster-monitoring-config`).
   `gitops`: every object inside `local-models`, `maas-routing` and `observability`.
 - **Namespaces** `local-models`, `maas-routing` and `observability` carry `argocd.argoproj.io/managed-by: openshift-gitops`
@@ -257,10 +258,12 @@ The same contract is in `gitops/AGENTS.md` §2. Keep both in sync.
   `false`: no reasoning), `secretStore.enabled`, `classifier.mode`
   (`classifier_mode`: `local` = the local model classifies, default; `external`; `off`),
   `observability.enabled` (`observability_enabled`, default `true`), `namespaces.observability`.
-- **Observability**: `gitops` deploys the Tempo instance `tempo` (kind `TempoMonolithic`) and the
-  OpenTelemetry collector `otel` (kind `OpenTelemetryCollector`; the operator names its Service
-  `otel-collector`) in the namespace `observability`. OTLP http on `otel-collector.observability.svc:4318`,
-  grpc on `:4317`. The `UIPlugin` of this repo finds the Tempo instance by itself. With
+- **Observability**: `gitops` deploys the Tempo instance `tempo` (kind `TempoMonolithic`, multi-tenancy
+  `openshift`, tenant `router`) and the OpenTelemetry collector `otel` (kind `OpenTelemetryCollector`; the
+  operator names its Service and ServiceAccount `otel-collector`) in the namespace `observability`. OTLP
+  http on `otel-collector.observability.svc:4318`, grpc on `:4317`. This repo lets that ServiceAccount write
+  the tenant (`observability_tempo_tenant`, `observability_collector_service_account`): keep the names
+  equal in both repos. The `UIPlugin` of this repo finds the Tempo instance by itself. With
   `observability_enabled: false` the operators are not installed and `gitops` deploys neither.
 - **SOTA model**: its settings and key come from `group_vars/all/vault.yml` (ansible-vault, not tracked) or
   from AgnosticV. All three of `sota_api_base`, `sota_model`, `sota_api_key` = hybrid routing; none =

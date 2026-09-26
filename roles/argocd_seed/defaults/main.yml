@@ -42,7 +42,7 @@ argocd_seed_classifier_mode: "{{ classifier_mode | default('local') }}"
 # Traces (gitops component observability, value observability.enabled): true only when the
 # OpenTelemetry and Tempo operators are installed (observability_enabled).
 argocd_seed_observability_enabled: "{{ observability_enabled | default(true) }}"
-argocd_seed_observability_namespace: observability
+argocd_seed_observability_namespace: "{{ observability_namespace | default('observability') }}"
 # Any other value of bootstrap/values.yaml, merged last (for example {tiers: [...]}).
 argocd_seed_extra_values: {}
 

@@ -202,6 +202,7 @@ The demo shows each routing decision as a trace (console: *Observe → Traces*) 
 |---|---|---|
 | Operators: Red Hat build of OpenTelemetry, Tempo Operator, Cluster Observability Operator | `group_vars/all/main.yml` (`operators`) | `observability_enabled` (default `true`) |
 | Console plugin `UIPlugin/distributed-tracing` (cluster-scoped) | post-install of `cluster_observability` | `observability_enabled` |
+| Tempo tenant write permission for the collector (ClusterRole + binding `tempo-traces-write-router`) | post-install of `tempo` | `observability_tempo_tenant`, `observability_collector_service_account` |
 | Namespace `observability` (label `argocd.argoproj.io/managed-by`) | `roles/argocd_seed` | always created |
 | Argo CD health check for `TempoMonolithic` | `roles/argocd_seed/files/health-tempo.lua` | always |
 | User workload monitoring (`enableUserWorkload: true`) | `roles/user_workload_monitoring` | `user_workload_monitoring_enabled` (default `true`) |
@@ -209,7 +210,10 @@ The demo shows each routing decision as a trace (console: *Observe → Traces*) 
 The seed passes `observability.enabled` (from `observability_enabled`) and `namespaces.observability`
 to the root Application. The gitops repo then deploys the Tempo instance `tempo` (TempoMonolithic) and
 the OpenTelemetry collector `otel` (OTLP on `otel-collector.observability.svc:4318`) in the namespace
-`observability`. Traces and metrics stay in the cluster: nothing is sent outside.
+`observability`. Tempo runs with multi-tenancy in `openshift` mode (the supported setup on OpenShift):
+the collector writes the tenant `router` with its service account token, and a user needs the read
+permission on the tenant to see the traces (cluster-admin has it). Traces and metrics stay in the
+cluster: nothing is sent outside.
 
 With `observability_enabled: false` the three operators are not installed and the gitops repo deploys
 no Tempo instance and no collector; the router still works and still exposes its metrics.
