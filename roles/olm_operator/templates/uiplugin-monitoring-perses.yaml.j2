@@ -1,0 +1,13 @@
+---
+# Cluster Observability Operator: Perses dashboards in the console (Observe -> Dashboards).
+# COO starts a Perses instance; the gitops repo adds the PersesDashboard of the router
+# (namespace maas-routing) and its PersesDatasources.
+apiVersion: observability.openshift.io/v1alpha1
+kind: UIPlugin
+metadata:
+  name: {{ name }}
+spec:
+  type: Monitoring
+  monitoring:
+    perses:
+      enabled: true
