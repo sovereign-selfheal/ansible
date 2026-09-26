@@ -1,0 +1,26 @@
+---
+# console_links: entries of the console application menu (grid icon, top right) that open
+# Observe -> Traces already filtered, so the demo shows the routing decisions without typing
+# a query. The console URL is read from the cluster, so the links work on every cluster.
+
+console_links_section: Sovereign Self-Healing demo
+# Tempo instance of the gitops repo (component observability) and its tenant.
+console_links_tempo_namespace: "{{ observability_namespace | default('observability') }}"
+console_links_tempo_name: tempo
+console_links_tempo_tenant: "{{ observability_tempo_tenant | default('router') }}"
+# Traces shown per link (Traces page default: 20).
+console_links_limit: 20
+# One ConsoleLink per entry. `query` is TraceQL on the spans of the router hook (router v0.5.0+).
+console_links_traces:
+  - name: sovereign-traces-all
+    text: "Traces: every routing decision"
+    query: '{ name = "router.chain" }'
+  - name: sovereign-traces-local
+    text: "Traces: routed to the LOCAL model"
+    query: '{ span.route.target = "local-fast" }'
+  - name: sovereign-traces-sota
+    text: "Traces: routed to the SOTA model"
+    query: '{ span.route.target = "sota-smart" }'
+  - name: sovereign-traces-privacy
+    text: "Traces: kept local by the privacy gate"
+    query: '{ name = "gate.privacy" && span.gate.verdict = "local" }'

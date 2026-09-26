@@ -2,7 +2,7 @@
 # Create the root Argo CD Application that points to the gitops repo, after the
 # workload namespaces and the Argo CD health checks. Needs sota_api_base and sota_model.
 # Before the seed: report the model pre-pull (no wait). After: check that the model uses
-# the pre-pulled images.
+# the pre-pulled images, and add the console menu links to the router traces.
 - name: GitOps seed
   hosts: localhost
   gather_facts: false
@@ -21,6 +21,14 @@
         name: argocd_seed
         apply:
           tags: [argocd_seed]
+      tags: always
+
+    - name: Add the trace links to the console menu
+      ansible.builtin.include_role:
+        name: console_links
+        apply:
+          tags: [console_links]
+      when: observability_enabled | bool
       tags: always
 
     - name: Check that the model uses the pre-pulled images

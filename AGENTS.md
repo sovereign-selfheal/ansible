@@ -55,6 +55,7 @@ Target platform: **demo.redhat.com** (RHDP). The code must be structured so that
 │   ├── ingress_gateway/        # RHOAI inference Gateway + passthrough Route (contract with gitops)
 │   ├── secrets_bootstrap/      # secret values for ESO + ClusterSecretStore (provider kubernetes)
 │   ├── user_workload_monitoring/  # enableUserWorkload in cluster-monitoring-config (merged, idempotent)
+│   ├── console_links/          # console menu links to the router traces (ConsoleLink, cluster-scoped)
 │   └── argocd_seed/
 ├── scripts/
 │   ├── resolve-operator-versions.sh   # prints package/channel/currentCSV on the target cluster
@@ -246,7 +247,8 @@ The same contract is in `gitops/AGENTS.md` §2. Keep both in sync.
   pre-pull DaemonSets (namespace `sovereign-selfheal-prepull`), the Argo CD settings, the root Application,
   the observability operators (OpenTelemetry, Tempo, Cluster Observability), the `UIPlugin`
   `distributed-tracing`, the Tempo tenant write permission (ClusterRole + ClusterRoleBinding
-  `tempo-traces-write-<tenant>`), the namespace `observability`, user workload monitoring
+  `tempo-traces-write-<tenant>`), the console menu links to the router traces (`ConsoleLink`
+  `sovereign-traces-*`), the namespace `observability`, user workload monitoring
   (`enableUserWorkload` in `cluster-monitoring-config`).
   `gitops`: every object inside `local-models`, `maas-routing` and `observability`.
 - **Namespaces** `local-models`, `maas-routing` and `observability` carry `argocd.argoproj.io/managed-by: openshift-gitops`

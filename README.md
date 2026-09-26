@@ -10,7 +10,7 @@ Read [`AGENTS.md`](AGENTS.md) before changing anything.
 | Early nodes: GPU MachineSets without waiting ([`roles/gpu_node_prep`](roles/gpu_node_prep/README.md)), pre-pull of the model images ([`roles/model_prepull`](roles/model_prepull/README.md)) | `playbooks/05-early-nodes.yml` | done |
 | Operators (OLM, pinned CSV, Manual approval) | `playbooks/10-operators.yml` | done |
 | Cluster prerequisites: inference Gateway and Route ([`roles/ingress_gateway`](roles/ingress_gateway/README.md)), secret values for ESO ([`roles/secrets_bootstrap`](roles/secrets_bootstrap/README.md)), user workload monitoring ([`roles/user_workload_monitoring`](roles/user_workload_monitoring/README.md)), wait for the GPU nodes ([`roles/gpu_node_prep`](roles/gpu_node_prep/README.md)) | `playbooks/20-prereqs.yml` | done |
-| GitOps seed: namespaces, Argo CD health checks, root Application ([`roles/argocd_seed`](roles/argocd_seed/README.md)) | `playbooks/30-gitops-seed.yml` | done |
+| GitOps seed: namespaces, Argo CD health checks, root Application ([`roles/argocd_seed`](roles/argocd_seed/README.md)), console links to the traces ([`roles/console_links`](roles/console_links/README.md)) | `playbooks/30-gitops-seed.yml` | done |
 | Teardown | `playbooks/99-destroy.yml` | todo |
 
 ## Operators
@@ -206,6 +206,7 @@ The demo shows each routing decision as a trace (console: *Observe → Traces*) 
 | Namespace `observability` (label `argocd.argoproj.io/managed-by`) | `roles/argocd_seed` | always created |
 | Argo CD health check for `TempoMonolithic` | `roles/argocd_seed/files/health-tempo.lua` | always |
 | User workload monitoring (`enableUserWorkload: true`) | `roles/user_workload_monitoring` | `user_workload_monitoring_enabled` (default `true`) |
+| Console menu links to the router traces, already filtered (`ConsoleLink`, section *Sovereign Self-Healing demo*) | [`roles/console_links`](roles/console_links/README.md), stage 30 | `observability_enabled` |
 
 The seed passes `observability.enabled` (from `observability_enabled`) and `namespaces.observability`
 to the root Application. The gitops repo then deploys the Tempo instance `tempo` (TempoMonolithic) and
