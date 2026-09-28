@@ -3,7 +3,7 @@
 # MachineSet of that zone (AWS only). Only the first `gpu_node_prep_active_zone_count`
 # zones get `gpu_node_prep_replicas` machines; the others are created with 0 replicas.
 
-gpu_node_prep_instance_type: g6.xlarge          # 1x NVIDIA L4 24 GB
+gpu_node_prep_instance_type: g7e.2xlarge        # 1x NVIDIA RTX PRO 6000 Blackwell 96 GB
 # Zones to cover. Empty: every zone that has a worker MachineSet, sorted by name.
 gpu_node_prep_zones: []
 gpu_node_prep_active_zone_count: 1

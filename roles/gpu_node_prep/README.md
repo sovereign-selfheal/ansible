@@ -33,7 +33,7 @@ works on a new cluster in a different region without changes.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `gpu_node_prep_instance_type` | `g6.xlarge` | EC2 instance type (1x NVIDIA L4 24 GB) |
+| `gpu_node_prep_instance_type` | `g7e.2xlarge` | EC2 instance type (1x NVIDIA RTX PRO 6000 Blackwell 96 GB, needed for the NVFP4 model) |
 | `gpu_node_prep_zones` | `[]` | Zones to cover; empty means every zone with a worker MachineSet |
 | `gpu_node_prep_active_zone_count` | `1` | How many zones (first in the list) get machines |
 | `gpu_node_prep_replicas` | `1` | Machines per active zone; `0` scales every GPU MachineSet down |

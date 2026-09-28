@@ -11,7 +11,7 @@ ocp_preflight_require_default_storageclass: true
 ocp_preflight_gpu_nodes_required: >-
   {{ (gpu_enabled | default(true) | bool) and not (gpu_nodes_managed | default(true) | bool) }}
 ocp_preflight_gpu_node_label_selector: nvidia.com/gpu.present=true
-ocp_preflight_gpu_instance_type_regex: '^(g4dn|g5|g6|g6e|gr6|p3|p4d|p4de|p5|p5e)\.'
+ocp_preflight_gpu_instance_type_regex: '^(g4dn|g5|g6|g6e|g7|g7e|gr6|p3|p4d|p4de|p5|p5e|p6-b200)\.'
 ocp_preflight_gpu_min_nodes: 1
 # Catalog sources the enabled operators come from must be READY.
 ocp_preflight_catalog_sources: >-

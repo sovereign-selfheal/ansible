@@ -9,7 +9,7 @@
 ocp_min_version: "4.22"
 
 # ----- GPU --------------------------------------------------------------------
-# Enables NFD + NVIDIA GPU operator (and their CRs) and the GPU nodes, and serves Granite on GPU.
+# Enables NFD + NVIDIA GPU operator (and their CRs) and the GPU nodes, and serves Qwen3.8 27B on GPU.
 # false: CPU profile (a small model on CPU, no GPU node), for quick tests only.
 gpu_enabled: true
 # true: this repo creates the GPU nodes (roles/gpu_node_prep, playbooks/20-prereqs.yml),
@@ -108,7 +108,7 @@ rhoai_dsc_components:
 
 # GPU MachineSets (roles/gpu_node_prep, playbooks/20-prereqs.yml): one per worker zone,
 # only the first `gpu_node_prep_active_zone_count` zones get machines, to keep costs low.
-gpu_node_prep_instance_type: g6.xlarge
+gpu_node_prep_instance_type: g7e.2xlarge   # 1x NVIDIA RTX PRO 6000 Blackwell 96 GB (native FP4)
 gpu_node_prep_active_zone_count: 1
 gpu_node_prep_replicas: 1
 
