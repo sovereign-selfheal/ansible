@@ -1,0 +1,19 @@
+---
+# Read-only check of team_users (vault). Also run by the preflight (tasks_from: preflight).
+- name: Check the list of users
+  vars:
+    team_access_names: "{{ team_access_users | map(attribute='username') | default([]) | list }}"
+    team_access_no_password: >-
+      {{ team_access_users | rejectattr('password', 'defined') | map(attribute='username') | list
+         + team_access_users | selectattr('password', 'defined') | rejectattr('password') | map(attribute='username') | list }}
+  ansible.builtin.assert:
+    that:
+      - team_access_users | rejectattr('username', 'defined') | list | length == 0
+      - team_access_names | select('match', '^[a-z0-9][a-z0-9._-]*$') | list | length == team_access_names | length
+      - team_access_names | unique | length == team_access_names | length
+      - team_access_no_password | length == 0
+    fail_msg: >-
+      team_users (group_vars/all/vault.yml) must be a list of {username, password}: lowercase
+      usernames, no duplicates, a non-empty initial password for each user
+      (without password: {{ team_access_no_password | join(', ') }}).
+    quiet: true

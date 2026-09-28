@@ -1,0 +1,23 @@
+---
+# Admin token of the master realm. It lives about one minute: take a new one before each phase.
+- name: Get an admin token
+  ansible.builtin.uri:
+    url: "{{ team_access_url }}/realms/master/protocol/openid-connect/token"
+    method: POST
+    body_format: form-urlencoded
+    body:
+      grant_type: password
+      client_id: admin-cli
+      username: "{{ team_access_admin_user }}"
+      password: "{{ team_access_admin_pass }}"
+    validate_certs: "{{ team_access_validate_certs }}"
+    ca_path: "{{ team_access_ca_path | default(omit) }}"
+  register: team_access_token_response
+  no_log: true
+  check_mode: false
+
+- name: Record the admin headers
+  ansible.builtin.set_fact:
+    team_access_headers:
+      Authorization: "Bearer {{ team_access_token_response.json.access_token }}"
+  no_log: true

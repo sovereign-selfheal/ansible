@@ -1,0 +1,23 @@
+# Keycloak behind an edge Route (route.yaml.j2): TLS ends at the router, plain HTTP in the cluster.
+apiVersion: k8s.keycloak.org/v2alpha1
+kind: Keycloak
+metadata:
+  name: {{ team_access_keycloak_name }}
+  namespace: {{ team_access_keycloak_namespace }}
+spec:
+  instances: {{ team_access_keycloak_instances }}
+  db:
+    vendor: postgres
+    host: {{ team_access_keycloak_name }}-db
+    port: 5432
+    database: keycloak
+    usernameSecret: {name: {{ team_access_keycloak_name }}-db, key: username}
+    passwordSecret: {name: {{ team_access_keycloak_name }}-db, key: password}
+  http:
+    httpEnabled: true
+  hostname:
+    hostname: {{ team_access_url }}
+  proxy:
+    headers: xforwarded
+  ingress:
+    enabled: false

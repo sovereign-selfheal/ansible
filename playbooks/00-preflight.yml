@@ -1,6 +1,7 @@
 ---
 # Read-only checks: cluster reachable, OpenShift 4.22, default StorageClass,
-# catalogs READY, GPU nodes when gpu_enabled. Fails before any change is made.
+# catalogs READY, operator pins resolved, GPU nodes when gpu_enabled, team users (vault)
+# and Keycloak mode when team_users is set. Fails before any change is made.
 - name: Preflight
   hosts: localhost
   gather_facts: false
@@ -10,4 +11,13 @@
         name: ocp_preflight
         apply:
           tags: [ocp_preflight, preflight]
+      tags: always
+
+    - name: Check the team users and detect Keycloak
+      ansible.builtin.include_role:
+        name: team_access
+        tasks_from: preflight
+        apply:
+          tags: [ocp_preflight, preflight, team_access]
+      when: team_access_enabled | bool
       tags: always

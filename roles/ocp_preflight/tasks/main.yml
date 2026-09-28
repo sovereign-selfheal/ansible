@@ -71,6 +71,20 @@
       (ready: {{ ocp_preflight_ready }})
     success_msg: "CatalogSources READY: {{ ocp_preflight_catalog_sources }}"
 
+# Stage 10 fails on an unresolved pin; fail here instead, before stage 05 creates GPU machines.
+- name: Assert the pins of the enabled operators are resolved
+  vars:
+    ocp_preflight_unresolved: >-
+      {{ operators | default([]) | selectattr('enabled', 'defined') | selectattr('enabled')
+         | selectattr('starting_csv', 'search', 'TODO') | map(attribute='key') | list }}
+  ansible.builtin.assert:
+    that:
+      - ocp_preflight_unresolved | length == 0
+    fail_msg: >-
+      Operators with an unresolved starting_csv: {{ ocp_preflight_unresolved | join(', ') }}.
+      Resolve them with scripts/resolve-operator-versions.sh and set the pin in group_vars/all/main.yml.
+    success_msg: Every enabled operator has a resolved pin
+
 - name: GPU node check
   when: ocp_preflight_gpu_nodes_required | bool
   block:

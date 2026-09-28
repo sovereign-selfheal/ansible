@@ -1,0 +1,56 @@
+---
+# Flow: detect Keycloak and the OAuth IdP -> install Keycloak when missing -> admin token ->
+#       realm + client (only without a matching IdP) -> users -> OAuth IdP -> Group + ClusterRoleBinding.
+# On RHDP the IdP `rhbk` exists: realm, client and IdP are reused, only users and RBAC are added.
+
+- name: Team access
+  ansible.builtin.debug:
+    msg: >-
+      Users {{ team_access_users | map(attribute='username') | join(', ') }} -> Keycloak realm {{ team_access_realm }}
+      (namespace {{ team_access_keycloak_namespace }}), OpenShift Group {{ team_access_group }}
+      bound to {{ team_access_cluster_role }}, IdP {{ team_access_idp_name }}
+
+- name: Check the list of users
+  ansible.builtin.include_tasks: validate.yml
+
+- name: Detect Keycloak and the OAuth identity provider
+  ansible.builtin.include_tasks: detect.yml
+
+- name: Install Keycloak
+  ansible.builtin.include_tasks: instance.yml
+  when: not team_access_idp_found
+
+# In check mode a Keycloak that does not run yet cannot answer: stop here.
+- name: Check mode, Keycloak not reachable yet
+  when:
+    - ansible_check_mode
+    - not team_access_keycloak_ready
+  block:
+    - name: Report what would be done
+      ansible.builtin.debug:
+        msg: >-
+          Check mode: Keycloak is not running yet in {{ team_access_keycloak_namespace }}; realm,
+          client, users, IdP and RBAC would be created after it starts (not dry-run).
+
+    - name: Stop the role in check mode
+      ansible.builtin.meta: end_role
+
+- name: Connect to Keycloak
+  ansible.builtin.include_tasks: connect.yml
+
+- name: Ensure the realm and the OpenID client
+  ansible.builtin.include_tasks: realm.yml
+  when: not team_access_idp_found
+
+- name: Ensure the users
+  ansible.builtin.include_tasks: users.yml
+
+- name: Ensure the OAuth identity provider
+  ansible.builtin.include_tasks: oauth.yml
+  when: not team_access_idp_found
+
+- name: Ensure the Group and its cluster role
+  ansible.builtin.include_tasks: rbac.yml
+
+- name: Report
+  ansible.builtin.include_tasks: report.yml

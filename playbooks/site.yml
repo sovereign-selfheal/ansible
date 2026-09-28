@@ -1,6 +1,7 @@
 ---
 # Full bootstrap, in order: preflight, early nodes (GPU MachineSets and model pre-pull,
-# no wait), operators, prerequisites (waits for the GPU nodes), GitOps seed.
+# no wait), operators, team access (only with team_users), prerequisites (waits for the
+# GPU nodes), GitOps seed.
 - name: Preflight
   ansible.builtin.import_playbook: 00-preflight.yml
 
@@ -9,6 +10,9 @@
 
 - name: Operators
   ansible.builtin.import_playbook: 10-operators.yml
+
+- name: Team access
+  ansible.builtin.import_playbook: 15-identity.yml
 
 - name: Cluster prerequisites
   ansible.builtin.import_playbook: 20-prereqs.yml

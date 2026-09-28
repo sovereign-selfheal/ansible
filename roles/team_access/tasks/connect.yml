@@ -1,0 +1,94 @@
+---
+# TLS trust for the calls from the Ansible host, admin credentials, first admin token.
+
+# With the self-signed router certificate (no defaultCertificate on the IngressController) the
+# Keycloak Route is signed by the ingress CA: trust it. With a custom certificate (RHDP: Let's
+# Encrypt) the system CAs are enough.
+- name: Read the default IngressController
+  kubernetes.core.k8s_info:
+    api_version: operator.openshift.io/v1
+    kind: IngressController
+    name: default
+    namespace: openshift-ingress-operator
+  register: team_access_ingresscontroller
+
+- name: Trust the ingress CA of the cluster
+  when:
+    - team_access_validate_certs | bool
+    - team_access_url is search('\\.' ~ (team_access_apps_domain | regex_escape) ~ '(/|$)')
+    - (team_access_ingresscontroller.resources | first).spec.defaultCertificate is not defined
+  block:
+    - name: Read the ingress CA
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: ConfigMap
+        name: default-ingress-cert
+        namespace: openshift-config-managed
+      register: team_access_ingress_ca_cm
+
+    - name: Write the ingress CA to a temporary file
+      ansible.builtin.tempfile:
+        state: file
+        suffix: .crt
+      register: team_access_ca_file
+      check_mode: false
+      changed_when: false
+
+    - name: Fill the CA file
+      ansible.builtin.copy:
+        content: "{{ (team_access_ingress_ca_cm.resources | first).data['ca-bundle.crt'] }}"
+        dest: "{{ team_access_ca_file.path }}"
+        mode: "0600"
+      check_mode: false
+      changed_when: false
+
+    - name: Record the CA
+      ansible.builtin.set_fact:
+        team_access_ca_path: "{{ team_access_ca_file.path }}"
+        team_access_ingress_ca: "{{ (team_access_ingress_ca_cm.resources | first).data['ca-bundle.crt'] }}"
+
+- name: Read the Keycloak admin Secret
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Secret
+    name: "{{ team_access_keycloak_name }}-initial-admin"
+    namespace: "{{ team_access_keycloak_namespace }}"
+  register: team_access_admin_secret
+  no_log: true
+  when: team_access_admin_username | length == 0 or team_access_admin_password | length == 0
+
+- name: Record the admin credentials
+  ansible.builtin.set_fact:
+    team_access_admin_user: >-
+      {{ team_access_admin_username if team_access_admin_username | length > 0
+         else (team_access_admin_secret.resources | first).data.username | b64decode }}
+    team_access_admin_pass: >-
+      {{ team_access_admin_password if team_access_admin_password | length > 0
+         else (team_access_admin_secret.resources | first).data.password | b64decode }}
+  no_log: true
+  when: >-
+    team_access_admin_username | length > 0 and team_access_admin_password | length > 0
+    or (team_access_admin_secret.resources | default([]) | length > 0)
+
+- name: Require the admin credentials
+  ansible.builtin.assert:
+    that:
+      - team_access_admin_user is defined
+    fail_msg: >-
+      No Keycloak admin credentials: the Secret {{ team_access_keycloak_namespace }}/{{ team_access_keycloak_name }}-initial-admin
+      is missing. Set keycloak_admin_username and keycloak_admin_password in the vault.
+    quiet: true
+
+- name: Wait until Keycloak answers
+  ansible.builtin.uri:
+    url: "{{ team_access_url }}/realms/master"
+    validate_certs: "{{ team_access_validate_certs }}"
+    ca_path: "{{ team_access_ca_path | default(omit) }}"
+  register: team_access_ping
+  until: team_access_ping.status == 200
+  retries: "{{ ((team_access_timeout | int) / (team_access_poll_delay | int)) | round(0, 'ceil') | int }}"
+  delay: "{{ team_access_poll_delay }}"
+  check_mode: false
+
+- name: Get an admin token
+  ansible.builtin.include_tasks: token.yml

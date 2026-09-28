@@ -1,0 +1,39 @@
+---
+# team_access: personal logins for the team through Keycloak (Red Hat build of Keycloak).
+# Keycloak users -> OpenShift Group -> ClusterRoleBinding. The Argo CD RBAC line for the same
+# Group is added by roles/argocd_seed.
+
+# From the vault only: a list of {username, password}. The password is set only when the user
+# is created, as a temporary password: Keycloak asks for a new one at the first login.
+team_access_users: "{{ team_users | default([]) }}"
+team_access_group: "{{ team_group | default('selfheal-team') }}"
+team_access_cluster_role: cluster-admin
+
+# Keycloak. The defaults are the RHDP values: an existing OpenID IdP with this name, or with
+# the issuer of this realm, is reused; otherwise the role creates realm, client and IdP.
+team_access_keycloak_namespace: "{{ keycloak_namespace | default('keycloak') }}"
+team_access_keycloak_name: keycloak
+team_access_realm: sso
+team_access_idp_name: rhbk
+team_access_client_id: idp-4-ocp
+# Base URL of Keycloak (https://<host>, without /realms). Empty: taken from the issuer of the
+# existing IdP, or https://<host prefix>.<apps domain> when the role installs Keycloak.
+team_access_keycloak_url: ""
+team_access_keycloak_host_prefix: sso
+# Admin of the master realm. Empty: read from the Secret <keycloak name>-initial-admin.
+team_access_admin_username: "{{ keycloak_admin_username | default('') }}"
+team_access_admin_password: "{{ keycloak_admin_password | default('') }}"
+# Keycloak group of the users created by this role. A listed user who exists outside this group
+# was created by someone else (the RHDP realm allows self-registration): the role stops.
+team_access_keycloak_group: "{{ team_access_group }}"
+# TLS check of the Keycloak URL from the Ansible host. With the self-signed router certificate
+# the role trusts the ingress CA of the cluster.
+team_access_validate_certs: true
+
+# Only when no Keycloak CR exists (not on RHDP): one PostgreSQL pod with a PVC.
+team_access_db_image: registry.redhat.io/rhel9/postgresql-16:latest
+team_access_db_size: 1Gi
+team_access_keycloak_instances: 1
+
+team_access_timeout: 900
+team_access_poll_delay: 10

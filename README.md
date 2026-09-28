@@ -6,9 +6,10 @@ Read [`AGENTS.md`](AGENTS.md) before changing anything.
 
 | Stage | Playbook | Status |
 |---|---|---|
-| Preflight (reachability, OCP 4.22, default StorageClass, catalogs, external GPU nodes) | `playbooks/00-preflight.yml` | done |
+| Preflight (reachability, OCP 4.22, default StorageClass, catalogs, resolved pins, external GPU nodes, team users) | `playbooks/00-preflight.yml` | done |
 | Early nodes: GPU MachineSets without waiting ([`roles/gpu_node_prep`](roles/gpu_node_prep/README.md)), pre-pull of the model images ([`roles/model_prepull`](roles/model_prepull/README.md)) | `playbooks/05-early-nodes.yml` | done |
 | Operators (OLM, pinned CSV, Manual approval) | `playbooks/10-operators.yml` | done |
+| Team access, only with `team_users` in the vault: Keycloak users, OpenShift Group, cluster role ([`roles/team_access`](roles/team_access/README.md)) | `playbooks/15-identity.yml` | new, see [Team access](#team-access) |
 | Cluster prerequisites: inference Gateway and Route ([`roles/ingress_gateway`](roles/ingress_gateway/README.md)), secret values for ESO ([`roles/secrets_bootstrap`](roles/secrets_bootstrap/README.md)), user workload monitoring ([`roles/user_workload_monitoring`](roles/user_workload_monitoring/README.md)), wait for the GPU nodes ([`roles/gpu_node_prep`](roles/gpu_node_prep/README.md)) | `playbooks/20-prereqs.yml` | done |
 | GitOps seed: namespaces, Argo CD health checks, root Application ([`roles/argocd_seed`](roles/argocd_seed/README.md)), console links to the traces ([`roles/console_links`](roles/console_links/README.md)) | `playbooks/30-gitops-seed.yml` | done |
 | Teardown | `playbooks/99-destroy.yml` | todo |
@@ -23,6 +24,7 @@ Declared in `group_vars/all/main.yml` (`operators`) and installed in this order 
 | `openshift_gitops` | openshift-gitops-operator | redhat-operators | openshift-gitops-operator | gitops-1.21 | openshift-gitops-operator.v1.21.4 | yes |
 | `cert_manager` | openshift-cert-manager-operator | redhat-operators | cert-manager-operator | stable-v1.20 | cert-manager-operator.v1.20.0 | yes |
 | `external_secrets` | openshift-external-secrets-operator | redhat-operators | external-secrets-operator | stable-v1.2 | openshift-external-secrets-operator.v1.2.1 | yes |
+| `rhbk` | rhbk-operator (Red Hat build of Keycloak; adopted on RHDP) | redhat-operators | keycloak | stable-v26.6 | rhbk-operator.v26.6.7-opr.1 | `team_access_enabled` |
 | `rhcl` | rhcl-operator (+ authorino, limitador, dns) | redhat-operators | openshift-operators | stable | rhcl-operator.v1.4.3 | yes |
 | `authorino` | authorino-operator (RHCL dependency, adopted) | redhat-operators | openshift-operators | stable | authorino-operator.v1.4.3 | yes |
 | `limitador` | limitador-operator (RHCL dependency, adopted) | redhat-operators | openshift-operators | stable | limitador-operator.v1.4.2 | yes |
@@ -34,7 +36,7 @@ Declared in `group_vars/all/main.yml` (`operators`) and installed in this order 
 | `tempo` | tempo-product (Tempo Operator) | redhat-operators | openshift-tempo-operator | stable | tempo-operator.v0.22.0-2 | `observability_enabled` |
 | `cluster_observability` | cluster-observability-operator (+ UIPlugin `distributed-tracing`) | redhat-operators | openshift-cluster-observability-operator | stable | cluster-observability-operator.v1.5.2 | `observability_enabled` |
 
-Pins were resolved on OCP 4.22.14 on 2026-09-23; the three observability operators on 2026-09-26. To refresh them against a cluster:
+Pins were resolved on OCP 4.22.14 on 2026-09-23; the three observability operators on 2026-09-26; rhbk on 2026-09-28. To refresh them against a cluster:
 
 ```bash
 scripts/resolve-operator-versions.sh                 # all packages used here
@@ -112,13 +114,65 @@ mkdir -p ~/.config/sovereign-selfheal
 scripts/run-playbook.sh playbooks/site.yml
 ```
 
+## Team access
+
+RHDP gives one login, `admin`. To give each team member a personal login with cluster-admin rights
+(OpenShift console and Argo CD UI), list the users in the vault. The usernames are not in git on
+purpose: they stay in `group_vars/all/vault.yml` (or come from AgnosticV as extra vars).
+
+```bash
+ansible-vault edit group_vars/all/vault.yml
+```
+
+```yaml
+team_users:
+  - username: alice          # lowercase: letters, digits, dot, dash, underscore
+    password: Initial-Pass-1 # initial password, changed at the first login
+  - username: bob
+    password: Initial-Pass-2
+```
+
+Then run the full bootstrap, or only this stage on a running cluster:
+
+```bash
+scripts/run-playbook.sh playbooks/site.yml
+scripts/run-playbook.sh playbooks/15-identity.yml   # needs the rhbk operator (stage 10)
+```
+
+What happens ([`roles/team_access`](roles/team_access/README.md)):
+
+1. **Keycloak.** On RHDP, Keycloak and its OpenShift identity provider `rhbk` (realm `sso`) already
+   exist: the role reuses them. On other clusters, stage 10 installs the Red Hat build of Keycloak
+   operator, and stage 15 creates PostgreSQL, the Keycloak instance (`https://sso.<apps domain>`),
+   the realm `sso` (no self-registration), the client and the identity provider `rhbk`.
+2. **Users.** Each user is created once in the realm, with the vault password as a **temporary**
+   password. A rerun does not touch an existing user and does not reset the password.
+3. **Permissions.** The OpenShift Group `selfheal-team` lists the usernames and is bound to
+   `cluster-admin`. Stage 30 adds `g, selfheal-team, role:admin` to the Argo CD RBAC policy.
+
+At the first login, choose **rhbk** on the login page, enter the username and the initial password,
+then set a new password. Keycloak may also ask for an email and a name. Each new cluster starts from
+the initial password again: share it with the person once, in a private channel.
+
+Notes:
+
+- **Remove a user:** delete the entry from the vault and run stage 15. The user leaves the Group (no
+  more rights); the Keycloak account stays until you delete it in the Keycloak console.
+- **Existing account with the same name:** the RHDP realm allows self-registration. If a listed
+  username already exists and the role did not create it, the play stops: otherwise that account
+  would become cluster-admin. Check it in the Keycloak console first.
+- **Keycloak admin:** the role reads the master admin from the Secret `keycloak/keycloak-initial-admin`.
+  If that password was changed, set `keycloak_admin_username` and `keycloak_admin_password` in the vault.
+- An empty `team_users` (the default in `group_vars/all/main.yml`) turns everything off: no operator,
+  no Keycloak, no Group.
+
 ## Run
 
 ```bash
 # dry run: shows diffs, skips approvals and waits
 scripts/run-playbook.sh playbooks/site.yml --check --diff
 
-# full bootstrap: preflight, operators, prerequisites, GitOps seed
+# full bootstrap: preflight, operators, team access, prerequisites, GitOps seed
 scripts/run-playbook.sh playbooks/site.yml   # hybrid routing with a vault, local-only mode without
 
 # a single operator
@@ -236,9 +290,10 @@ shellcheck scripts/*.sh
 
 - `inventory/group_vars` is a symlink to the repo-root `group_vars/`, so the variables are loaded
   for `inventory/localhost.yml` while keeping the layout described in AGENTS.md.
-- RHDP clusters already have OpenShift GitOps and cert-manager installed, with Automatic approval.
-  The role keeps their OperatorGroups and updates their Subscriptions to the numbered channel,
-  Manual approval and the pinned CSV. The operators are not reinstalled.
+- RHDP clusters already have OpenShift GitOps, cert-manager and the Red Hat build of Keycloak installed,
+  with Automatic approval. The role keeps their OperatorGroups and updates their Subscriptions to the
+  numbered channel, Manual approval and the pinned CSV. The operators are not reinstalled. Keycloak is
+  managed only when `team_users` is set.
 
 ## License
 

@@ -1,0 +1,31 @@
+---
+# Read-only, from playbooks/00-preflight.yml: check the users list and report whether Keycloak
+# and its IdP will be reused (RHDP) or installed, before any change to the cluster.
+- name: Check the list of users
+  ansible.builtin.include_tasks: validate.yml
+
+- name: Detect Keycloak and the OAuth identity provider
+  ansible.builtin.include_tasks: detect.yml
+
+# olm_operator looks for an existing Subscription only in its own namespace. If the platform
+# installed the rhbk operator in another namespace, stage 10 would install it a second time.
+- name: Read the Subscriptions of the Keycloak operator
+  kubernetes.core.k8s_info:
+    api_version: operators.coreos.com/v1alpha1
+    kind: Subscription
+  register: team_access_all_subs
+
+- name: Check that the Keycloak operator is not installed in another namespace
+  vars:
+    team_access_rhbk_elsewhere: >-
+      {{ team_access_all_subs.resources | selectattr('spec.name', 'equalto', 'rhbk-operator')
+         | rejectattr('metadata.namespace', 'equalto', team_access_keycloak_namespace)
+         | map(attribute='metadata') | map(attribute='namespace') | list }}
+  ansible.builtin.assert:
+    that:
+      - team_access_rhbk_elsewhere | length == 0
+    fail_msg: >-
+      rhbk-operator is already subscribed in {{ team_access_rhbk_elsewhere | join(', ') }}, not in
+      {{ team_access_keycloak_namespace }}. Set keycloak_namespace (and subscription_name of the rhbk
+      entry) to adopt that Subscription, otherwise stage 10 installs the operator a second time.
+    quiet: true
