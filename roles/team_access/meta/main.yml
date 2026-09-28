@@ -1,0 +1,12 @@
+---
+galaxy_info:
+  role_name: team_access
+  namespace: sovereign_selfheal
+  author: sovereign-selfheal demo team
+  description: Team users in Keycloak (installed when missing), OpenShift Group and cluster role
+  license: Apache-2.0
+  min_ansible_version: "2.18"
+  platforms:
+    - name: GenericLinux
+      versions: [all]
+dependencies: []

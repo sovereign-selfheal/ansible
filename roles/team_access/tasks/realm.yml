@@ -1,0 +1,97 @@
+---
+# Only when no IdP points to Keycloak: realm, OpenID client for OpenShift, client secret in
+# openshift-config. Existing objects are never changed (created only when missing).
+
+- name: Read the realm
+  ansible.builtin.uri:
+    url: "{{ team_access_url }}/admin/realms/{{ team_access_realm_name }}"
+    headers: "{{ team_access_headers }}"
+    status_code: [200, 404]
+    validate_certs: "{{ team_access_validate_certs }}"
+    ca_path: "{{ team_access_ca_path | default(omit) }}"
+  register: team_access_realm_get
+  check_mode: false
+
+# Self-registration off: people get an account only from this role (or from an admin).
+- name: Create the realm
+  ansible.builtin.uri:
+    url: "{{ team_access_url }}/admin/realms"
+    method: POST
+    headers: "{{ team_access_headers }}"
+    body_format: json
+    body:
+      realm: "{{ team_access_realm_name }}"
+      enabled: true
+      registrationAllowed: false
+    status_code: [201]
+    validate_certs: "{{ team_access_validate_certs }}"
+    ca_path: "{{ team_access_ca_path | default(omit) }}"
+  changed_when: true
+  when: team_access_realm_get.status == 404
+
+- name: Read the OpenID client
+  ansible.builtin.uri:
+    url: "{{ team_access_url }}/admin/realms/{{ team_access_realm_name }}/clients?clientId={{ team_access_client_id | urlencode }}"
+    headers: "{{ team_access_headers }}"
+    validate_certs: "{{ team_access_validate_certs }}"
+    ca_path: "{{ team_access_ca_path | default(omit) }}"
+  register: team_access_client_get
+  check_mode: false
+  when: not ansible_check_mode or team_access_realm_get.status == 200
+
+- name: Create the OpenID client for OpenShift
+  ansible.builtin.uri:
+    url: "{{ team_access_url }}/admin/realms/{{ team_access_realm_name }}/clients"
+    method: POST
+    headers: "{{ team_access_headers }}"
+    body_format: json
+    body:
+      clientId: "{{ team_access_client_id }}"
+      protocol: openid-connect
+      publicClient: false
+      clientAuthenticatorType: client-secret
+      standardFlowEnabled: true
+      directAccessGrantsEnabled: false
+      redirectUris:
+        - "https://oauth-openshift.{{ team_access_apps_domain }}/oauth2callback/{{ team_access_idp_used }}"
+    status_code: [201]
+    validate_certs: "{{ team_access_validate_certs }}"
+    ca_path: "{{ team_access_ca_path | default(omit) }}"
+  changed_when: true
+  when: team_access_client_get.json | default([]) | length == 0
+
+- name: Read the OpenID client again
+  ansible.builtin.uri:
+    url: "{{ team_access_url }}/admin/realms/{{ team_access_realm_name }}/clients?clientId={{ team_access_client_id | urlencode }}"
+    headers: "{{ team_access_headers }}"
+    validate_certs: "{{ team_access_validate_certs }}"
+    ca_path: "{{ team_access_ca_path | default(omit) }}"
+  register: team_access_client_get
+  check_mode: false
+  when: not ansible_check_mode
+
+- name: Read the client secret
+  ansible.builtin.uri:
+    url: "{{ team_access_url }}/admin/realms/{{ team_access_realm_name }}/clients/{{ (team_access_client_get.json | first).id }}/client-secret"
+    headers: "{{ team_access_headers }}"
+    validate_certs: "{{ team_access_validate_certs }}"
+    ca_path: "{{ team_access_ca_path | default(omit) }}"
+  register: team_access_client_secret
+  no_log: true
+  check_mode: false
+  when: not ansible_check_mode
+
+- name: Ensure the client secret for the OAuth server
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: "{{ team_access_idp_used }}-client-secret"
+        namespace: openshift-config
+      type: Opaque
+      stringData:
+        clientSecret: "{{ team_access_client_secret.json.value }}"
+  no_log: true
+  when: not ansible_check_mode

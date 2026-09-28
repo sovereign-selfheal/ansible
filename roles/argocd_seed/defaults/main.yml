@@ -63,6 +63,13 @@ argocd_seed_health_checks:
     kind: TempoMonolithic
     file: health-tempo.lua
 
+# OpenShift Groups that are admin in the Argo CD UI (Dex passes the OpenShift groups to Argo CD).
+# One line `g, <group>, role:admin` per group is added to spec.rbac.policy; the lines already
+# there (e.g. the RHDP `g, admin, role:admin`) are kept. Default: the team Group of
+# roles/team_access, when team_users is set.
+argocd_seed_admin_groups: >-
+  {{ [team_group | default('selfheal-team')] if (team_access_enabled | default(false) | bool) else [] }}
+
 # Wait until the root Application (and so every component) is Synced and Healthy.
 # With the gpu profile the first start of Granite takes about 26 minutes on a new GPU node
 # (model image pull 15 min, vLLM image, model load), so the wait is longer there.

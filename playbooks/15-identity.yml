@@ -1,0 +1,16 @@
+---
+# Team access (roles/team_access), only when team_users (vault) is not empty: Keycloak users,
+# the OpenShift Group and its cluster role. On RHDP the Keycloak realm and IdP are reused; on
+# other clusters Keycloak is installed and configured here (the rhbk operator comes from stage 10).
+# Runs before the long waits of stages 20 and 30, so the team can log in early.
+- name: Team access
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Create the team users and their permissions
+      ansible.builtin.include_role:
+        name: team_access
+        apply:
+          tags: [team_access]
+      when: team_access_enabled | bool
+      tags: always

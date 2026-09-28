@@ -1,0 +1,68 @@
+# PostgreSQL for Keycloak: one pod, one PVC. Enough for a demo (a few users, no HA).
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ team_access_keycloak_name }}-db
+  namespace: {{ team_access_keycloak_namespace }}
+  labels:
+    app: {{ team_access_keycloak_name }}-db
+spec:
+  selector:
+    app: {{ team_access_keycloak_name }}-db
+  ports:
+    - name: postgresql
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ team_access_keycloak_name }}-db
+  namespace: {{ team_access_keycloak_namespace }}
+  labels:
+    app: {{ team_access_keycloak_name }}-db
+spec:
+  serviceName: {{ team_access_keycloak_name }}-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ team_access_keycloak_name }}-db
+  template:
+    metadata:
+      labels:
+        app: {{ team_access_keycloak_name }}-db
+    spec:
+      containers:
+        - name: postgresql
+          image: {{ team_access_db_image }}
+          env:
+            - name: POSTGRESQL_USER
+              valueFrom:
+                secretKeyRef: {name: {{ team_access_keycloak_name }}-db, key: username}
+            - name: POSTGRESQL_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: {{ team_access_keycloak_name }}-db, key: password}
+            - name: POSTGRESQL_DATABASE
+              value: keycloak
+          ports:
+            - name: postgresql
+              containerPort: 5432
+          readinessProbe:
+            exec:
+              command: [/usr/libexec/check-container]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {memory: 512Mi}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/pgsql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: {{ team_access_db_size }}

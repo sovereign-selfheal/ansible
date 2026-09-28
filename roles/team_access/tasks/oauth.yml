@@ -1,0 +1,84 @@
+---
+# Only when no IdP points to Keycloak: add one OpenID IdP to OAuth cluster. The existing IdPs
+# (htpasswd, kubeadmin flows, others) are kept as they are.
+
+- name: Ensure the CA of the IdP
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: "{{ team_access_idp_used }}-ca"
+        namespace: openshift-config
+      data:
+        ca.crt: "{{ team_access_ingress_ca }}"
+  when: team_access_ingress_ca is defined
+
+- name: Build the identity provider
+  vars:
+    team_access_openid:
+      clientID: "{{ team_access_client_id }}"
+      clientSecret: {name: "{{ team_access_idp_used }}-client-secret"}
+      issuer: "{{ team_access_url }}/realms/{{ team_access_realm_name }}"
+      claims:
+        preferredUsername: [preferred_username]
+        email: [email]
+        name: [name]
+  ansible.builtin.set_fact:
+    team_access_new_idp:
+      name: "{{ team_access_idp_used }}"
+      mappingMethod: claim
+      type: OpenID
+      openID: >-
+        {{ team_access_openid | combine({'ca': {'name': team_access_idp_used ~ '-ca'}})
+           if team_access_ingress_ca is defined else team_access_openid }}
+
+- name: Add the identity provider to OAuth cluster
+  kubernetes.core.k8s:
+    state: patched
+    api_version: config.openshift.io/v1
+    kind: OAuth
+    name: cluster
+    merge_type: merge
+    definition:
+      spec:
+        identityProviders: "{{ team_access_idps + [team_access_new_idp] }}"
+  register: team_access_oauth_patch
+
+# The authentication operator rolls out oauth-openshift: first Progressing, then Available again.
+- name: Wait for the new OAuth server
+  when:
+    - team_access_oauth_patch is changed
+    - not ansible_check_mode
+  block:
+    - name: Wait until the authentication operator starts the rollout
+      kubernetes.core.k8s_info:
+        api_version: config.openshift.io/v1
+        kind: ClusterOperator
+        name: authentication
+      register: team_access_auth_co
+      until: >-
+        team_access_auth_co.resources | length == 1
+        and (team_access_auth_co.resources | first).status.conditions
+            | selectattr('type', 'equalto', 'Progressing') | selectattr('status', 'equalto', 'True') | list | length > 0
+      retries: 12
+      delay: 10
+      failed_when: false
+
+    - name: Wait until the authentication operator is Available again
+      kubernetes.core.k8s_info:
+        api_version: config.openshift.io/v1
+        kind: ClusterOperator
+        name: authentication
+      register: team_access_auth_co
+      until:
+        - team_access_auth_co.resources | length == 1
+        - >-
+          (team_access_auth_co.resources | first).status.conditions
+          | selectattr('type', 'equalto', 'Available') | selectattr('status', 'equalto', 'True') | list | length > 0
+        - >-
+          (team_access_auth_co.resources | first).status.conditions
+          | selectattr('type', 'in', ['Progressing', 'Degraded']) | selectattr('status', 'equalto', 'True') | list | length == 0
+      retries: "{{ ((team_access_timeout | int) / (team_access_poll_delay | int)) | round(0, 'ceil') | int }}"
+      delay: "{{ team_access_poll_delay }}"

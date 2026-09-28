@@ -1,0 +1,122 @@
+---
+# Keycloak group of the role, then one user per entry of team_access_users. A user is created
+# once, with the initial password as temporary; a rerun never touches an existing user.
+# A listed user who exists outside the group was not created by this role (the RHDP realm allows
+# self-registration): the role stops instead of making that account cluster-admin.
+
+- name: Get a fresh admin token
+  ansible.builtin.include_tasks: token.yml
+
+- name: Read the Keycloak group
+  ansible.builtin.uri:
+    url: "{{ team_access_url }}/admin/realms/{{ team_access_realm_name }}/groups?search={{ team_access_keycloak_group | urlencode }}&exact=true"
+    headers: "{{ team_access_headers }}"
+    validate_certs: "{{ team_access_validate_certs }}"
+    ca_path: "{{ team_access_ca_path | default(omit) }}"
+  register: team_access_kc_group_get
+  check_mode: false
+
+- name: Create the Keycloak group
+  ansible.builtin.uri:
+    url: "{{ team_access_url }}/admin/realms/{{ team_access_realm_name }}/groups"
+    method: POST
+    headers: "{{ team_access_headers }}"
+    body_format: json
+    body:
+      name: "{{ team_access_keycloak_group }}"
+    status_code: [201]
+    validate_certs: "{{ team_access_validate_certs }}"
+    ca_path: "{{ team_access_ca_path | default(omit) }}"
+  changed_when: true
+  when: team_access_kc_group_get.json | selectattr('name', 'equalto', team_access_keycloak_group) | list | length == 0
+
+- name: Look up the users
+  ansible.builtin.uri:
+    url: "{{ team_access_url }}/admin/realms/{{ team_access_realm_name }}/users?username={{ team_access_user.username | urlencode }}&exact=true"
+    headers: "{{ team_access_headers }}"
+    validate_certs: "{{ team_access_validate_certs }}"
+    ca_path: "{{ team_access_ca_path | default(omit) }}"
+  register: team_access_user_get
+  loop: "{{ team_access_users }}"
+  loop_control:
+    loop_var: team_access_user
+    label: "{{ team_access_user.username }}"
+  check_mode: false
+
+- name: Split existing and new users
+  ansible.builtin.set_fact:
+    team_access_existing: >-
+      {%- set acc = namespace(list=[]) -%}
+      {%- for r in team_access_user_get.results -%}
+      {%- set found = r.json | selectattr('username', 'equalto', r.team_access_user.username) | list -%}
+      {%- if found | length > 0 -%}
+      {%- set acc.list = acc.list + [{'username': r.team_access_user.username, 'id': (found | first).id}] -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ acc.list }}
+
+- name: Read the groups of the existing users
+  ansible.builtin.uri:
+    url: "{{ team_access_url }}/admin/realms/{{ team_access_realm_name }}/users/{{ team_access_user.id }}/groups"
+    headers: "{{ team_access_headers }}"
+    validate_certs: "{{ team_access_validate_certs }}"
+    ca_path: "{{ team_access_ca_path | default(omit) }}"
+  register: team_access_user_groups
+  loop: "{{ team_access_existing }}"
+  loop_control:
+    loop_var: team_access_user
+    label: "{{ team_access_user.username }}"
+  check_mode: false
+
+- name: Stop on users that this role did not create
+  vars:
+    team_access_ours: >-
+      {%- set acc = namespace(list=[]) -%}
+      {%- for r in team_access_user_groups.results -%}
+      {%- if r.json | selectattr('name', 'equalto', team_access_keycloak_group) | list | length > 0 -%}
+      {%- set acc.list = acc.list + [r.team_access_user.username] -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ acc.list }}
+    team_access_not_ours: "{{ team_access_existing | map(attribute='username') | reject('in', team_access_ours) | list }}"
+  ansible.builtin.assert:
+    that:
+      - team_access_not_ours | length == 0
+    fail_msg: >-
+      Keycloak realm {{ team_access_realm_name }} already has the user(s) {{ team_access_not_ours | join(', ') }}
+      outside the group {{ team_access_keycloak_group }}: someone else created them (self-registration?).
+      They would become {{ team_access_cluster_role }}. Check them in the Keycloak console and delete them,
+      or add them to the group if they are right, then run again.
+    quiet: true
+
+- name: Create the new users with a temporary password
+  ansible.builtin.uri:
+    url: "{{ team_access_url }}/admin/realms/{{ team_access_realm_name }}/users"
+    method: POST
+    headers: "{{ team_access_headers }}"
+    body_format: json
+    body:
+      username: "{{ team_access_user.username }}"
+      enabled: true
+      groups: ["/{{ team_access_keycloak_group }}"]
+      requiredActions: [UPDATE_PASSWORD]
+      credentials:
+        - type: password
+          value: "{{ team_access_user.password }}"
+          temporary: true
+    status_code: [201]
+    validate_certs: "{{ team_access_validate_certs }}"
+    ca_path: "{{ team_access_ca_path | default(omit) }}"
+  changed_when: true
+  loop: "{{ team_access_users | rejectattr('username', 'in', team_access_existing | map(attribute='username') | list) | list }}"
+  loop_control:
+    loop_var: team_access_user
+    label: "{{ team_access_user.username }}"
+  no_log: true
+  register: team_access_created
+
+- name: Record the created users
+  ansible.builtin.set_fact:
+    team_access_created_names: >-
+      {{ team_access_users | map(attribute='username')
+         | reject('in', team_access_existing | map(attribute='username') | list) | list }}

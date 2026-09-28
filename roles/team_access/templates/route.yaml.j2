@@ -1,0 +1,16 @@
+# Edge Route with the default ingress certificate of the cluster (nothing to copy or rotate).
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: {{ team_access_keycloak_name }}
+  namespace: {{ team_access_keycloak_namespace }}
+spec:
+  host: {{ team_access_url | regex_replace('^https://', '') | regex_replace('/.*$', '') }}
+  to:
+    kind: Service
+    name: {{ team_access_keycloak_name }}-service
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

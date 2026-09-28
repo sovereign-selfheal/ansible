@@ -39,6 +39,7 @@ in `AGENTS.md` §7.
 | `argocd_seed_extra_values` | `{}` | Other values of `bootstrap/values.yaml` |
 | `argocd_seed_namespaces` | `local-models`, `maas-routing`, `observability` | Namespaces and labels |
 | `argocd_seed_health_checks` | Application, AuthPolicy, TokenRateLimitPolicy, TempoMonolithic | Lua files in `files/` |
+| `argocd_seed_admin_groups` | `[selfheal-team]` when `team_users` is set, else `[]` | OpenShift Groups made admin in the Argo CD UI: one `g, <group>, role:admin` line each, appended to `spec.rbac.policy` (existing lines are kept) |
 | `argocd_seed_wait` / `_timeout` | `true` / `3600` (gpu), `1800` (cpu) | Wait for Synced and Healthy. The first start of Granite on a new GPU node takes about 26 min |
 
 ## Usage

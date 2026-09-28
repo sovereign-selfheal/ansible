@@ -1,0 +1,20 @@
+---
+- name: Remove the temporary CA file
+  ansible.builtin.file:
+    path: "{{ team_access_ca_path }}"
+    state: absent
+  check_mode: false
+  changed_when: false
+  when: team_access_ca_path is defined
+
+- name: Team access summary
+  vars:
+    team_access_created_list: "{{ team_access_created_names | default([]) }}"
+  ansible.builtin.debug:
+    msg: >-
+      Keycloak {{ team_access_url }}, realm {{ team_access_realm_name }}, IdP {{ team_access_idp_used }}
+      ({{ 'reused' if team_access_idp_found else 'configured by this role' }}).
+      Created now (temporary password, change at first login): {{ team_access_created_list | join(', ') or 'none' }}.
+      Left as they were: {{ team_access_users | map(attribute='username') | reject('in', team_access_created_list) | join(', ') or 'none' }}.
+      Group {{ team_access_group }} -> {{ team_access_cluster_role }}.
+      Log in: console -> "{{ team_access_idp_used }}".

@@ -1,0 +1,31 @@
+---
+# The IdP sends no groups claim, so the Group is an OpenShift Group with the usernames. It works
+# before the first login too: membership is by name, the User object is created at the login.
+# The role owns the full member list: a user removed from team_users leaves the Group.
+
+- name: Ensure the OpenShift Group
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: user.openshift.io/v1
+      kind: Group
+      metadata:
+        name: "{{ team_access_group }}"
+      users: "{{ team_access_users | map(attribute='username') | list }}"
+
+- name: Bind the Group to its cluster role
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: ClusterRoleBinding
+      metadata:
+        name: "{{ team_access_group }}-{{ team_access_cluster_role }}"
+      roleRef:
+        apiGroup: rbac.authorization.k8s.io
+        kind: ClusterRole
+        name: "{{ team_access_cluster_role }}"
+      subjects:
+        - apiGroup: rbac.authorization.k8s.io
+          kind: Group
+          name: "{{ team_access_group }}"

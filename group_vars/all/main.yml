@@ -54,6 +54,18 @@ observability_collector_service_account: otel-collector
 # ServiceMonitors of the demo namespaces (router metrics, vLLM metrics).
 user_workload_monitoring_enabled: true
 
+# ----- Team access (roles/team_access, playbooks/15-identity.yml) ---------------------
+# Personal logins for the team: Keycloak users (realm `sso` on RHDP), members of the OpenShift
+# Group below, which is cluster-admin and Argo CD admin. The users are set in the vault only
+# (see vault.yml.example): a list of {username, password}. The password is the initial one and
+# must be changed at the first login.
+# Keycloak on RHDP is reused; on other clusters the role installs it (rhbk operator below).
+# An empty list turns the feature off (nothing is installed or changed).
+team_users: []
+team_group: selfheal-team
+team_access_enabled: "{{ team_users | length > 0 }}"
+keycloak_namespace: keycloak
+
 # ----- Post-install CR settings (rendered by roles/olm_operator/templates) ----
 gateway_class_name: openshift-default
 gateway_class_controller: openshift.io/gateway-controller/v1   # OCP 4.20+ controller name
@@ -173,6 +185,26 @@ operators:
           name: external-secrets-webhook
           namespace: external-secrets
           condition: {type: Available, status: "True"}
+
+  # 2c. Red Hat build of Keycloak: the identity provider of the team users (roles/team_access).
+  #     RHDP pre-installs it (namespace keycloak, Automatic): the role adopts that Subscription.
+  #     Only when team_access_enabled.
+  - key: rhbk
+    name: rhbk-operator
+    namespace: "{{ keycloak_namespace }}"
+    # RHDP uses the same Subscription name (rhbk-operator), namespace and OwnNamespace OperatorGroup
+    # (keycloak-og), checked on OCP 4.22.14 on 2026-09-28.
+    channel: stable-v26.6
+    starting_csv: rhbk-operator.v26.6.7-opr.1     # resolved on OCP 4.22.14 on 2026-09-28
+    # Pre-installed by RHDP from its own channel: a newer version than the pin is kept and frozen
+    # with Manual approval (approved by the team on 2026-09-28, see AGENTS.md §9).
+    allow_newer_installed: true
+    source: redhat-operators
+    source_namespace: openshift-marketplace
+    install_plan_approval: Manual
+    create_operator_group: true
+    operator_group_all_namespaces: false          # OwnNamespace: the Keycloak CR lives here
+    enabled: "{{ team_access_enabled }}"
 
   # 3. Red Hat Connectivity Link, before RHOAI so odh-model-controller starts with Kuadrant present.
   #    Installed in openshift-operators (existing global-operators OperatorGroup). Only a

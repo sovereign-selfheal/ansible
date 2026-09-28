@@ -1,0 +1,106 @@
+---
+# Read-only. Result:
+#   team_access_idp_found   an OpenID IdP already points to Keycloak (RHDP): reuse realm, client, IdP
+#   team_access_url         Keycloak base URL, team_access_realm_name the realm of the users
+#   team_access_keycloak_*  state of the Keycloak CR (only relevant when the role installs it)
+
+- name: Read the cluster ingress configuration
+  kubernetes.core.k8s_info:
+    api_version: config.openshift.io/v1
+    kind: Ingress
+    name: cluster
+  register: team_access_ingress_config
+
+- name: Read the OAuth configuration
+  kubernetes.core.k8s_info:
+    api_version: config.openshift.io/v1
+    kind: OAuth
+    name: cluster
+  register: team_access_oauth
+
+- name: Compute the expected Keycloak URL and issuer
+  vars:
+    team_access_apps: "{{ (team_access_ingress_config.resources | first).spec.domain }}"
+    team_access_default_url: >-
+      {{ team_access_keycloak_url if team_access_keycloak_url | length > 0
+         else 'https://' ~ team_access_keycloak_host_prefix ~ '.' ~ team_access_apps }}
+  ansible.builtin.set_fact:
+    team_access_apps_domain: "{{ team_access_apps }}"
+    team_access_default_url: "{{ team_access_default_url | regex_replace('/+$', '') }}"
+    team_access_expected_issuer: "{{ team_access_default_url | regex_replace('/+$', '') }}/realms/{{ team_access_realm }}"
+    team_access_idps: "{{ (team_access_oauth.resources | first).spec.identityProviders | default([], true) }}"
+
+# Match by name (RHDP: rhbk) or by issuer, so the same realm never gets a second IdP.
+- name: Find the identity provider of the realm
+  ansible.builtin.set_fact:
+    team_access_idp_matches: >-
+      {%- set acc = namespace(list=[]) -%}
+      {%- for idp in team_access_idps -%}
+      {%- set issuer = ((idp.openID | default({})).issuer | default('')) | regex_replace('/+$', '') -%}
+      {%- if idp.name == team_access_idp_name
+            or (idp.type | default('') == 'OpenID' and issuer == team_access_expected_issuer) -%}
+      {%- set acc.list = acc.list + [idp] -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ acc.list }}
+
+- name: Check the identity provider found
+  ansible.builtin.assert:
+    that:
+      - team_access_idp_matches | length <= 1
+      - team_access_idp_matches | length == 0 or (team_access_idp_matches | first).type | default('') == 'OpenID'
+    fail_msg: >-
+      OAuth cluster has IdP(s) {{ team_access_idp_matches | map(attribute='name') | list }} matching
+      {{ team_access_idp_name }} / {{ team_access_expected_issuer }}, but not exactly one OpenID IdP.
+      Set team_access_idp_name to a free name or fix the OAuth configuration.
+    quiet: true
+
+- name: Take URL and realm from the existing IdP
+  vars:
+    team_access_issuer: "{{ (team_access_idp_matches | first).openID.issuer | regex_replace('/+$', '') }}"
+    team_access_parts: "{{ team_access_issuer | regex_search('^(https://.+)/realms/([^/]+)$', '\\1', '\\2') }}"
+  ansible.builtin.set_fact:
+    team_access_idp_found: true
+    team_access_idp_used: "{{ (team_access_idp_matches | first).name }}"
+    team_access_url: >-
+      {{ team_access_keycloak_url | regex_replace('/+$', '') if team_access_keycloak_url | length > 0
+         else team_access_parts[0] }}
+    team_access_realm_name: "{{ team_access_parts[1] }}"
+  when: team_access_idp_matches | length == 1
+
+- name: No IdP yet, the role configures one
+  ansible.builtin.set_fact:
+    team_access_idp_found: false
+    team_access_idp_used: "{{ team_access_idp_name }}"
+    team_access_url: "{{ team_access_default_url }}"
+    team_access_realm_name: "{{ team_access_realm }}"
+  when: team_access_idp_matches | length == 0
+
+- name: Read the Keycloak CR
+  kubernetes.core.k8s_info:
+    api_version: k8s.keycloak.org/v2alpha1
+    kind: Keycloak
+    name: "{{ team_access_keycloak_name }}"
+    namespace: "{{ team_access_keycloak_namespace }}"
+  register: team_access_keycloak_cr
+
+- name: Record the Keycloak state
+  vars:
+    team_access_cr: "{{ team_access_keycloak_cr.resources | first | default({}) }}"
+  ansible.builtin.set_fact:
+    team_access_keycloak_api: "{{ team_access_keycloak_cr.api_found | default(false) }}"
+    team_access_keycloak_exists: "{{ team_access_keycloak_cr.resources | length > 0 }}"
+    team_access_keycloak_ready: >-
+      {{ team_access_idp_found
+         or (team_access_cr.status.conditions | default([])
+             | selectattr('type', 'equalto', 'Ready') | selectattr('status', 'equalto', 'True') | list | length > 0) }}
+
+- name: Report the mode
+  ansible.builtin.debug:
+    msg: >-
+      {{ ('Adopt: IdP ' ~ team_access_idp_used ~ ' -> ' ~ team_access_url ~ ', realm ' ~ team_access_realm_name
+          ~ '. Realm, client and IdP are reused.')
+         if team_access_idp_found
+         else ('Install: no IdP for ' ~ team_access_expected_issuer ~ '. Keycloak CR '
+               ~ ('exists' if team_access_keycloak_exists else 'missing, will be created')
+               ~ '; realm, client and IdP ' ~ team_access_idp_used ~ ' will be created if missing.') }}

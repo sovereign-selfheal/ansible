@@ -106,6 +106,40 @@
           {%- endfor -%}
           {{ acc.list }}
 
+- name: Read the Argo CD instance
+  kubernetes.core.k8s_info:
+    api_version: argoproj.io/v1beta1
+    kind: ArgoCD
+    name: "{{ argocd_seed_argocd_name }}"
+    namespace: "{{ argocd_seed_namespace }}"
+  register: argocd_seed_argocd
+  when: argocd_seed_admin_groups | length > 0
+
+# Line by line: only the missing lines are appended, so a rerun gives changed=0.
+- name: Add the admin groups to the Argo CD RBAC policy
+  vars:
+    argocd_seed_policy_lines: >-
+      {{ ((argocd_seed_argocd.resources | first).spec.rbac.policy | default('', true)).splitlines()
+         if argocd_seed_argocd.resources | length > 0 else [] }}
+    argocd_seed_wanted_lines: >-
+      {{ argocd_seed_admin_groups | map('regex_replace', '^', 'g, ') | map('regex_replace', '$', ', role:admin') | list }}
+    argocd_seed_missing_lines: >-
+      {{ argocd_seed_wanted_lines | reject('in', argocd_seed_policy_lines | map('trim') | list) | list }}
+  kubernetes.core.k8s:
+    state: patched
+    api_version: argoproj.io/v1beta1
+    kind: ArgoCD
+    name: "{{ argocd_seed_argocd_name }}"
+    namespace: "{{ argocd_seed_namespace }}"
+    merge_type: merge
+    definition:
+      spec:
+        rbac:
+          policy: "{{ (argocd_seed_policy_lines + argocd_seed_missing_lines) | join('\n') }}"
+  when:
+    - argocd_seed_admin_groups | length > 0
+    - argocd_seed_missing_lines | length > 0
+
 - name: Ensure the root Application
   kubernetes.core.k8s:
     state: present

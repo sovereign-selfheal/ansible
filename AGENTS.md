@@ -44,6 +44,7 @@ Target platform: **demo.redhat.com** (RHDP). The code must be structured so that
 │   ├── 00-preflight.yml        # cluster reachability, version, node/GPU checks
 │   ├── 05-early-nodes.yml      # GPU MachineSets (no wait) + model image pre-pull, before the operators
 │   ├── 10-operators.yml        # OLM subscriptions
+│   ├── 15-identity.yml         # team users (Keycloak, OpenShift Group), only with team_users
 │   ├── 20-prereqs.yml          # waits for the GPU nodes (after the operators), secrets, Gateway
 │   ├── 30-gitops-seed.yml      # Argo CD Application → gitops repo
 │   └── 99-destroy.yml          # optional teardown, symmetric to site.yml
@@ -56,6 +57,7 @@ Target platform: **demo.redhat.com** (RHDP). The code must be structured so that
 │   ├── secrets_bootstrap/      # secret values for ESO + ClusterSecretStore (provider kubernetes)
 │   ├── user_workload_monitoring/  # enableUserWorkload in cluster-monitoring-config (merged, idempotent)
 │   ├── console_links/          # console menu links to the router traces (ConsoleLink, cluster-scoped)
+│   ├── team_access/            # team users in Keycloak (installed when missing), Group + cluster role
 │   └── argocd_seed/
 ├── scripts/
 │   ├── resolve-operator-versions.sh   # prints package/channel/currentCSV on the target cluster
@@ -86,6 +88,7 @@ oc get packagemanifests -n openshift-marketplace <package> \
 | `openshift_gitops` | Red Hat OpenShift GitOps | `openshift-gitops-operator` | `openshift-gitops-operator` | `gitops-1.21` | Installed **first**; Argo CD is used by everything downstream. Pre-installed by RHDP (`latest`, Automatic): the role adopts it (`allow_newer_installed: true`) |
 | `cert_manager` | cert-manager Operator for Red Hat OpenShift | `openshift-cert-manager-operator` | `cert-manager-operator` | `stable-v1.20` | Prerequisite of RHOAI 3.x KServe. Pre-installed by RHDP: adopted (`allow_newer_installed: true`) |
 | `external_secrets` | External Secrets Operator for Red Hat OpenShift | `openshift-external-secrets-operator` | `external-secrets-operator` | `stable-v1.2` | Post-install: `ExternalSecretsConfig/cluster` (the operator deploys the controller into `external-secrets`), then waits for the webhook. The `ClusterSecretStore` comes later, when the backend is chosen |
+| `rhbk` | Red Hat build of Keycloak | `rhbk-operator` | `keycloak` | `stable-v26.6` | Only when `team_users` is set (vault). Pre-installed by RHDP: adopted (`allow_newer_installed: true`, approved 2026-09-28). The Keycloak instance, realm and users are handled by `roles/team_access` (stage 15) |
 | `rhcl` | Red Hat Connectivity Link (Kuadrant) | `rhcl-operator` | `openshift-operators` | `stable` (only channel) | Before RHOAI. Brings `authorino-operator`, `limitador-operator`, `dns-operator` as OLM dependencies (pinned in `expected_dependency_csvs`). Post-install: GatewayClass, `Kuadrant` in `kuadrant-system`, Authorino TLS. The LLM gateway and its policies are deployed by GitOps |
 | `authorino` / `limitador` / `dns_operator` | RHCL dependencies | `authorino-operator` / `limitador-operator` / `dns-operator` | `openshift-operators` | `stable` | OLM creates their Subscriptions while it installs `rhcl` (Automatic). These entries adopt them by name (`subscription_name`) and set Manual approval + pinned startingCSV |
 | `rhoai` | Red Hat OpenShift AI | `rhods-operator` | `redhat-ods-operator` | `stable-3.5` | Creates `DataScienceCluster` (v2) with KServe; model serving (vLLM) itself is deployed by GitOps |
@@ -168,7 +171,7 @@ With `gpu_nodes_managed: false` the GPU nodes come from outside (for example an 
 create them and the preflight fails if there are none.
 
 **Operators pre-installed by the platform (`allow_newer_installed`).** RHDP clusters already have some
-operators (today: OpenShift GitOps and cert-manager) installed from the default channel, often `latest`,
+operators (today: OpenShift GitOps, cert-manager and the Red Hat build of Keycloak) installed from the default channel, often `latest`,
 with Automatic approval. The version found on a new RHDP cluster cannot be known in advance and OLM cannot
 downgrade. For these entries only, `allow_newer_installed: true` tells the role:
 
@@ -249,7 +252,9 @@ The same contract is in `gitops/AGENTS.md` §2. Keep both in sync.
   `distributed-tracing` and `monitoring` (Perses), the Tempo tenant write permission (ClusterRole + ClusterRoleBinding
   `tempo-traces-write-<tenant>`), the console menu links to the router traces (`ConsoleLink`
   `sovereign-traces-*`), the namespace `observability`, user workload monitoring
-  (`enableUserWorkload` in `cluster-monitoring-config`).
+  (`enableUserWorkload` in `cluster-monitoring-config`), team access when `team_users` is set (Keycloak
+  in the namespace `keycloak` when this repo installs it: PostgreSQL, `Keycloak` CR, Route; realm, client,
+  users; the OAuth IdP; `Group/selfheal-team` and its ClusterRoleBinding; the Argo CD RBAC line of that Group).
   `gitops`: every object inside `local-models`, `maas-routing` and `observability`.
 - **Namespaces** `local-models`, `maas-routing` and `observability` carry `argocd.argoproj.io/managed-by: openshift-gitops`
   (the default Argo CD instance manages only labelled namespaces), and `local-models` also
@@ -292,6 +297,11 @@ Known exception: the pre-pull DaemonSets of `roles/model_prepull`. They are a no
 cache), not a demo workload, and they must exist before Argo CD and before the operators are installed,
 so they cannot come from the gitops repo. Their images must match `localModel.profiles` in
 `gitops/bootstrap/values.yaml`; the role warns after the seed when they differ.
+
+Second exception: Keycloak with its PostgreSQL in `roles/team_access`, only on clusters without it
+(RHDP already has it). It is the identity provider of the cluster, an auth prerequisite: people log in
+to the console and to Argo CD through it, so it must exist before Argo CD is used, and its users come
+from the vault.
 
 ## 9. When in doubt
 

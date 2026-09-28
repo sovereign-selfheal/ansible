@@ -1,0 +1,82 @@
+---
+# Only when no IdP points to Keycloak. An existing Keycloak CR is reused (only waited for);
+# without one, the role creates PostgreSQL, the Keycloak CR and an edge Route.
+# Keycloak here is an auth prerequisite (people log in to Argo CD with it), not a demo workload:
+# see AGENTS.md §8.
+
+- name: Require the Keycloak operator
+  ansible.builtin.assert:
+    that:
+      - team_access_keycloak_api | bool or ansible_check_mode
+    fail_msg: >-
+      The Keycloak CRD (k8s.keycloak.org/v2alpha1) is missing. Install the rhbk operator first:
+      scripts/run-playbook.sh playbooks/10-operators.yml --tags rhbk
+    quiet: true
+
+# In check mode the namespace may exist only as a dry-run (stage 10): nothing to dry-run here.
+- name: Check mode, Keycloak would be created
+  ansible.builtin.debug:
+    msg: >-
+      Check mode: PostgreSQL, the Keycloak CR {{ team_access_keycloak_name }} and its Route
+      {{ team_access_url }} would be created in {{ team_access_keycloak_namespace }} (not dry-run).
+  when:
+    - not team_access_keycloak_exists
+    - ansible_check_mode
+
+- name: Create PostgreSQL and the Keycloak CR
+  when:
+    - not team_access_keycloak_exists
+    - not ansible_check_mode
+  block:
+    - name: Read the database Secret
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Secret
+        name: "{{ team_access_keycloak_name }}-db"
+        namespace: "{{ team_access_keycloak_namespace }}"
+      register: team_access_db_secret
+      no_log: true
+
+    # The password is generated only once: a rerun keeps the Secret (and the database) as it is.
+    - name: Create the database Secret
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: "{{ team_access_keycloak_name }}-db"
+            namespace: "{{ team_access_keycloak_namespace }}"
+          type: Opaque
+          stringData:
+            username: keycloak
+            password: "{{ lookup('ansible.builtin.password', '/dev/null', chars=['ascii_letters', 'digits'], length=32) }}"
+      no_log: true
+      when: team_access_db_secret.resources | length == 0
+
+    - name: Ensure PostgreSQL, the Keycloak CR and its Route
+      kubernetes.core.k8s:
+        state: present
+        definition: "{{ lookup('ansible.builtin.template', team_access_template) | ansible.builtin.from_yaml_all | list }}"
+      loop:
+        - postgresql.yaml.j2
+        - keycloak.yaml.j2
+        - route.yaml.j2
+      loop_control:
+        loop_var: team_access_template
+
+- name: Wait until Keycloak is Ready
+  kubernetes.core.k8s_info:
+    api_version: k8s.keycloak.org/v2alpha1
+    kind: Keycloak
+    name: "{{ team_access_keycloak_name }}"
+    namespace: "{{ team_access_keycloak_namespace }}"
+    wait: true
+    wait_condition: {type: Ready, status: "True"}
+    wait_sleep: "{{ team_access_poll_delay }}"
+    wait_timeout: "{{ team_access_timeout }}"
+  when: not ansible_check_mode
+
+- name: Record that Keycloak is Ready
+  ansible.builtin.set_fact:
+    team_access_keycloak_ready: "{{ not ansible_check_mode or team_access_keycloak_ready }}"

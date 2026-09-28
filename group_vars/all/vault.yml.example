@@ -21,3 +21,16 @@ sota_api_key: sk-REPLACE_ME
 # classifier_base_url: https://provider.example.com/v1
 # classifier_model: example-classifier
 # classifier_api_key: sk-REPLACE_ME
+
+# Team access (roles/team_access): personal logins with cluster-admin rights, see README "Team access".
+# The usernames stay here, not in git. The password is the initial one: Keycloak asks for a new
+# one at the first login. An empty list (the default) turns team access off.
+# team_users:
+#   - username: alice
+#     password: REPLACE_ME
+#   - username: bob
+#     password: REPLACE_ME
+#
+# Keycloak master admin, only when the Secret keycloak/keycloak-initial-admin is out of date:
+# keycloak_admin_username: admin
+# keycloak_admin_password: REPLACE_ME
