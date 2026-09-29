@@ -267,7 +267,7 @@ The demo shows each routing decision as a trace (console: *Observe → Traces*) 
 | Tempo tenant write permission for the collector (ClusterRole + binding `tempo-traces-write-router`) | post-install of `tempo` | `observability_tempo_tenant`, `observability_collector_service_account` |
 | Namespace `observability` (label `argocd.argoproj.io/managed-by`) | `roles/argocd_seed` | always created |
 | Argo CD health check for `TempoMonolithic` | `roles/argocd_seed/files/health-tempo.lua` | always |
-| User workload monitoring (`enableUserWorkload: true`) | `roles/user_workload_monitoring` | `user_workload_monitoring_enabled` (default `true`) |
+| User workload monitoring (`enableUserWorkload: true`), Prometheus retention 15 days on a 20Gi volume per replica | `roles/user_workload_monitoring` | `user_workload_monitoring_enabled` (default `true`), `user_workload_monitoring_retention`, `user_workload_monitoring_storage_size` |
 | Metrics of Limitador and Authorino (PodMonitor `limitador`, ServiceMonitor `authorino` in `kuadrant-system`) | post-install of `rhcl` (`templates/kuadrant-monitors.yaml.j2`) | `kuadrant_metrics_enabled` (default `true`) |
 | Label `tier` on the Limitador counters (`TelemetryPolicy` `openshift-ai-inference-labels` on the Gateway): tokens counted per API-key tier | `roles/ingress_gateway` | `ingress_gateway_metric_labels` (empty = no policy) |
 | Console menu links to the router traces, already filtered (`ConsoleLink`, section *Sovereign Self-Healing demo*) | [`roles/console_links`](roles/console_links/README.md), stage 30 | `observability_enabled` |

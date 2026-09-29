@@ -8,6 +8,19 @@ user_workload_monitoring_config_namespace: openshift-monitoring
 user_workload_monitoring_config_name: cluster-monitoring-config
 # Namespace where the monitoring operator starts the user workload Prometheus.
 user_workload_monitoring_namespace: openshift-user-workload-monitoring
+# ConfigMap of the user workload monitoring stack (in user_workload_monitoring_namespace). The role
+# changes only the keys below under `prometheus` and keeps every other setting.
+user_workload_monitoring_uwm_config_name: user-workload-monitoring-config
+# How long the user workload Prometheus keeps the metrics (router, vLLM, Kuadrant). The OpenShift
+# default is 24h, and without a volume the metrics are lost when a Prometheus pod restarts.
+# The demo can last until January 2027. Empty = keep the OpenShift default.
+user_workload_monitoring_retention: 15d
+# Prometheus deletes the oldest data above this size: keep it below the volume size.
+user_workload_monitoring_retention_size: 18GB
+# One PersistentVolumeClaim per Prometheus replica (2). Empty size = no volume (emptyDir).
+user_workload_monitoring_storage_size: 20Gi
+# Empty = the default StorageClass of the cluster (gp3-csi on AWS).
+user_workload_monitoring_storage_class: ""
 # Seconds to wait for the user workload Prometheus.
 user_workload_monitoring_timeout: 600
 user_workload_monitoring_poll_delay: 10

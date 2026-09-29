@@ -55,7 +55,7 @@ Target platform: **demo.redhat.com** (RHDP). The code must be structured so that
 │   ├── model_prepull/          # pre-pull DaemonSets of the local model images
 │   ├── ingress_gateway/        # RHOAI inference Gateway + passthrough Route (contract with gitops); after the seed: Kuadrant wasm check
 │   ├── secrets_bootstrap/      # secret values for ESO + ClusterSecretStore (provider kubernetes)
-│   ├── user_workload_monitoring/  # enableUserWorkload in cluster-monitoring-config (merged, idempotent)
+│   ├── user_workload_monitoring/  # enableUserWorkload + Prometheus retention and volume (merged, idempotent)
 │   ├── console_links/          # console menu links to the router traces (ConsoleLink, cluster-scoped)
 │   ├── team_access/            # team users in Keycloak (installed when missing), Group + cluster role
 │   └── argocd_seed/
@@ -255,7 +255,8 @@ The same contract is in `gitops/AGENTS.md` §2. Keep both in sync.
   `distributed-tracing` and `monitoring` (Perses), the Tempo tenant write permission (ClusterRole + ClusterRoleBinding
   `tempo-traces-write-<tenant>`), the console menu links to the router traces (`ConsoleLink`
   `sovereign-traces-*`), the namespace `observability`, user workload monitoring
-  (`enableUserWorkload` in `cluster-monitoring-config`), team access when `team_users` is set (Keycloak
+  (`enableUserWorkload` in `cluster-monitoring-config`; retention and volume of the user workload
+  Prometheus in `user-workload-monitoring-config`), team access when `team_users` is set (Keycloak
   in the namespace `keycloak` when this repo installs it: PostgreSQL, `Keycloak` CR, Route; realm, client,
   users; the OAuth IdP; `Group/selfheal-team` and its ClusterRoleBinding; the Argo CD RBAC line of that Group).
   `gitops`: every object inside `local-models`, `maas-routing` and `observability`.
