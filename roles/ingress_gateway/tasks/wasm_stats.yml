@@ -1,0 +1,52 @@
+---
+# Read wasm.remote_load_fetch_{successes,failures} from the Envoy of every running gateway pod.
+# Waits until each pod has tried the download once. Sets ingress_gateway_wasm_pods (all pods
+# read) and ingress_gateway_wasm_broken (pods with no successful download).
+
+- name: Read the gateway pods
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Pod
+    namespace: "{{ ingress_gateway_namespace }}"
+    label_selectors:
+      - "{{ ingress_gateway_pod_selector }}"
+    field_selectors:
+      - status.phase=Running
+  register: ingress_gateway_pods
+
+- name: Read the wasm download stats of each gateway pod
+  kubernetes.core.k8s_exec:
+    namespace: "{{ ingress_gateway_namespace }}"
+    pod: "{{ ingress_gateway_pod.metadata.name }}"
+    container: "{{ ingress_gateway_proxy_container }}"
+    command: pilot-agent request GET stats?filter=wasm.remote_load_fetch_
+  register: ingress_gateway_wasm_exec
+  changed_when: false
+  until: >-
+    (ingress_gateway_wasm_exec.stdout | default('')
+     | regex_findall('remote_load_fetch_(?:successes|failures): ([0-9]+)') | map('int') | sum) > 0
+  retries: "{{ ((ingress_gateway_wasm_wait_timeout | int) / (ingress_gateway_wasm_poll_delay | int)) | round(0, 'ceil') | int }}"
+  delay: "{{ ingress_gateway_wasm_poll_delay }}"
+  loop: "{{ ingress_gateway_pods.resources | rejectattr('metadata.deletionTimestamp', 'defined') | list }}"
+  loop_control:
+    loop_var: ingress_gateway_pod
+    label: "{{ ingress_gateway_pod.metadata.name }}"
+
+- name: Record the pods without the wasm module
+  ansible.builtin.set_fact:
+    ingress_gateway_wasm_pods: "{{ ingress_gateway_wasm_exec.results | map(attribute='ingress_gateway_pod.metadata.name') | list }}"
+    ingress_gateway_wasm_broken: >-
+      {{ ingress_gateway_wasm_exec.results
+         | selectattr('stdout', 'search', '(?m)remote_load_fetch_successes: 0$')
+         | map(attribute='ingress_gateway_pod.metadata.name') | list }}
+
+- name: Show the wasm download stats
+  ansible.builtin.debug:
+    msg: >-
+      {{ ingress_gateway_wasm_result.ingress_gateway_pod.metadata.name }}:
+      successes {{ ingress_gateway_wasm_result.stdout | regex_findall('successes: ([0-9]+)') | first | default('?') }},
+      failures {{ ingress_gateway_wasm_result.stdout | regex_findall('failures: ([0-9]+)') | first | default('?') }}
+  loop: "{{ ingress_gateway_wasm_exec.results }}"
+  loop_control:
+    loop_var: ingress_gateway_wasm_result
+    label: "{{ ingress_gateway_wasm_result.ingress_gateway_pod.metadata.name }}"

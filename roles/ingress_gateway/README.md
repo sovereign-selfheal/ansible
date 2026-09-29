@@ -22,6 +22,24 @@ after 60 s by default: every longer answer was cut. The role repeats the current
 of the default IngressController and changes only `connectionIdleTimeout`, so the load balancer is
 not recreated. Clients should still prefer streaming.
 
+## After the seed: Kuadrant wasm module
+
+`tasks/verify.yml` runs from `playbooks/30-gitops-seed.yml`, after the seed (only when the seed
+waits for the workloads). When gitops applies the AuthPolicy, Kuadrant adds a wasm filter to the
+Gateway. Each gateway Envoy downloads the module once from the Service `kuadrant-operator-wasm`
+(namespace `openshift-operators`), with no retry. If the download fails, the pod answers **503**
+to every request (Envoy access log: `wasm_fail_stream`) and stays broken. This happened on
+2026-09-29 on one of the two pods. The Route is passthrough and HAProxy balances by source IP, so
+some clients always reached the broken pod and got only errors.
+
+The check reads `wasm.remote_load_fetch_successes` from the Envoy stats of every gateway pod
+(`pilot-agent request GET stats`). A probe of the public host is not enough: it reaches one pod
+only. Pods with no successful download are deleted once. The Deployment creates new pods, which
+download the module again. The play fails if a new pod has no module either: then check the
+Service `kuadrant-operator-wasm`. On a healthy cluster the check changes nothing.
+
+Run it alone: `scripts/run-playbook.sh playbooks/30-gitops-seed.yml --tags ingress_gateway`.
+
 ## Variables (`defaults/main.yml`)
 
 | Variable | Default | Meaning |
@@ -38,3 +56,7 @@ not recreated. Clients should still prefer streaming.
 | `ingress_gateway_apps_domain` | `""` | Override of the apps domain |
 | `ingress_gateway_cert_secret` | `""` | Override of the certificate Secret |
 | `ingress_gateway_timeout` | `600` | Seconds to wait for the Gateway `Programmed` condition |
+| `ingress_gateway_pod_selector` | `gateway.networking.k8s.io/gateway-name=<name>` | Label selector of the gateway pods (wasm check) |
+| `ingress_gateway_proxy_container` | `istio-proxy` | Container that runs Envoy in the gateway pods |
+| `ingress_gateway_wasm_wait_timeout` | `300` | Seconds to wait for the wasm download of each pod and for the new pods |
+| `ingress_gateway_wasm_poll_delay` | `10` | Seconds between two reads |

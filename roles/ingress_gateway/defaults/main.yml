@@ -31,3 +31,11 @@ ingress_gateway_cert_secret: ""
 ingress_gateway_fallback_cert_secret: router-certs-default
 
 ingress_gateway_timeout: 600
+
+# After the GitOps seed (tasks/verify.yml): every gateway pod must have loaded the Kuadrant
+# wasm module. A pod that fails the first fetch answers 503 to every request and never
+# retries, so it is deleted once and must come back with the module.
+ingress_gateway_pod_selector: gateway.networking.k8s.io/gateway-name={{ ingress_gateway_name }}
+ingress_gateway_proxy_container: istio-proxy
+ingress_gateway_wasm_wait_timeout: 300
+ingress_gateway_wasm_poll_delay: 10

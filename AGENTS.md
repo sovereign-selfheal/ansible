@@ -53,7 +53,7 @@ Target platform: **demo.redhat.com** (RHDP). The code must be structured so that
 │   ├── olm_operator/           # generic, reusable: one role, N operators via vars
 │   ├── gpu_node_prep/
 │   ├── model_prepull/          # pre-pull DaemonSets of the local model images
-│   ├── ingress_gateway/        # RHOAI inference Gateway + passthrough Route (contract with gitops)
+│   ├── ingress_gateway/        # RHOAI inference Gateway + passthrough Route (contract with gitops); after the seed: Kuadrant wasm check; after the seed: Kuadrant wasm check
 │   ├── secrets_bootstrap/      # secret values for ESO + ClusterSecretStore (provider kubernetes)
 │   ├── user_workload_monitoring/  # enableUserWorkload in cluster-monitoring-config (merged, idempotent)
 │   ├── console_links/          # console menu links to the router traces (ConsoleLink, cluster-scoped)

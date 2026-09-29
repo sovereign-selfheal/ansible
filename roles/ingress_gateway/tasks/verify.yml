@@ -1,0 +1,69 @@
+---
+# After the seed: every gateway pod must have loaded the Kuadrant wasm module.
+# Kuadrant adds the wasm filter to the Gateway when gitops applies the AuthPolicy. Each Envoy
+# downloads the module once from the kuadrant-operator-wasm Service, with no retry. A pod whose
+# download fails keeps the filter with failure_policy FAIL_RELOAD and answers every request with
+# 503 (access log: wasm_fail_stream). Seen on 2026-09-29 on one of the two pods.
+# The Route is passthrough and HAProxy balances by source IP, so a probe of the public host
+# reaches one pod only: the Envoy stats of each pod are the reliable check.
+# A pod is healthy when wasm.remote_load_fetch_successes >= 1. Broken pods are deleted once;
+# the Deployment creates new pods, which download the module again.
+
+- name: Wait until every gateway pod has tried to download the wasm module
+  ansible.builtin.include_tasks: wasm_stats.yml
+
+- name: Remember the pods to delete
+  ansible.builtin.set_fact:
+    ingress_gateway_wasm_deleted: "{{ ingress_gateway_wasm_broken }}"
+
+- name: Delete the gateway pods without the wasm module
+  kubernetes.core.k8s:
+    state: absent
+    api_version: v1
+    kind: Pod
+    name: "{{ ingress_gateway_broken_pod }}"
+    namespace: "{{ ingress_gateway_namespace }}"
+    wait: false
+  loop: "{{ ingress_gateway_wasm_deleted }}"
+  loop_control:
+    loop_var: ingress_gateway_broken_pod
+
+- name: Check the new gateway pods
+  when: ingress_gateway_wasm_deleted | length > 0
+  block:
+    # The old pods drain for up to ingress_gateway_drain_seconds, so wait for the new pods,
+    # not for the deletion. The HPA keeps ingress_gateway_min_replicas pods.
+    - name: Wait until the new gateway pods are Ready
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Pod
+        namespace: "{{ ingress_gateway_namespace }}"
+        label_selectors:
+          - "{{ ingress_gateway_pod_selector }}"
+        field_selectors:
+          - status.phase=Running
+      register: ingress_gateway_new_pods
+      until: >-
+        (ingress_gateway_new_pods.resources
+         | rejectattr('metadata.deletionTimestamp', 'defined')
+         | rejectattr('metadata.name', 'in', ingress_gateway_wasm_deleted)
+         | map(attribute='status.conditions') | map('selectattr', 'type', 'equalto', 'Ready')
+         | map('map', attribute='status') | map('first') | select('equalto', 'True') | list | length)
+        >= ingress_gateway_min_replicas | int
+      retries: "{{ ((ingress_gateway_wasm_wait_timeout | int) / (ingress_gateway_wasm_poll_delay | int)) | round(0, 'ceil') | int }}"
+      delay: "{{ ingress_gateway_wasm_poll_delay }}"
+
+    - name: Read the wasm download stats of the new gateway pods
+      ansible.builtin.include_tasks: wasm_stats.yml
+
+- name: Assert every gateway pod has the wasm module
+  ansible.builtin.assert:
+    that: ingress_gateway_wasm_broken | length == 0
+    fail_msg: >-
+      Gateway pods without the Kuadrant wasm module (wasm.remote_load_fetch_successes 0):
+      {{ ingress_gateway_wasm_broken | join(', ') }}. They answer 503 to every request.
+      Check the Service kuadrant-operator-wasm in openshift-operators, then delete the pods.
+    success_msg: >-
+      {{ ingress_gateway_wasm_pods | length }} gateway pod(s) loaded the Kuadrant wasm module{{
+      ' (' ~ (ingress_gateway_wasm_deleted | join(', ')) ~ ' deleted and recreated)'
+      if ingress_gateway_wasm_deleted | length > 0 else '' }}
