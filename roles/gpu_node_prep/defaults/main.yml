@@ -11,6 +11,7 @@ gpu_node_prep_replicas: 1                       # per active zone; 0 scales ever
 
 # Root disk of the GPU nodes (EBS). The model images need space: after the first pull of
 # Granite and vLLM a 100 GiB disk was 57% full, and the kubelet deletes unused images at 85%.
+# With Qwen3.8 and vLLM the 200 GiB disk uses 69 of 214 GB (2026-09-29).
 # Changes apply only to new Machines: scale the MachineSet to 0 and back to 1.
 gpu_node_prep_volume_size: 200                  # GiB
 gpu_node_prep_volume_type: gp3

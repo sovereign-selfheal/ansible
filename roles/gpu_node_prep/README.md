@@ -57,11 +57,13 @@ works on a new cluster in a different region without changes.
 The first block device of the source MachineSet is copied with `volumeSize`, `volumeType` and,
 when set, `iops` and `throughput` changed. Encryption, the KMS key and any other block device
 stay as in the worker. The default is 200 GiB: after the first pull of Granite and vLLM a
-100 GiB disk was 57% full, and the kubelet starts deleting unused images at 85%.
+100 GiB disk was 57% full, and the kubelet starts deleting unused images at 85%. With Qwen3.8
+and vLLM the 200 GiB disk uses 69 of 214 GB after the first pull (2026-09-29).
 
-IOPS and throughput keep the gp3 baseline by default. The image download from quay.io (about
-22 MB/s, one stream for the 16 GB model layer) is slower than the baseline disk (125 MB/s), so
-a faster disk does not make the pull faster.
+IOPS and throughput keep the gp3 baseline by default. The image download from quay.io (one
+stream per layer: about 22 MB/s for the 16 GB Granite layer, at least 36 MB/s for the 19.5 GB
+Qwen3.8 layer) is slower than the baseline disk (125 MB/s), so a faster disk does not make the
+pull faster.
 
 **The disk settings apply only to new Machines.** An existing GPU node keeps its disk. To
 change it, scale the MachineSet to 0 and back (the model is down in the meantime):

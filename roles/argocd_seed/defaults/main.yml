@@ -71,8 +71,9 @@ argocd_seed_admin_groups: >-
   {{ [team_group | default('selfheal-team')] if (team_access_enabled | default(false) | bool) else [] }}
 
 # Wait until the root Application (and so every component) is Synced and Healthy.
-# With the gpu profile the first start of Granite takes about 26 minutes on a new GPU node
-# (model image pull 15 min, vLLM image, model load), so the wait is longer there.
+# With the gpu profile the first start of the local model takes about 27 minutes on a new GPU
+# node (Qwen3.8 on 2026-09-29: image pulls with one CRI-O restart, then about 4 minutes of model
+# load), so the wait is longer there.
 argocd_seed_wait: true
 argocd_seed_timeout: "{{ 3600 if argocd_seed_model_profile == 'gpu' else 1800 }}"
 argocd_seed_poll_delay: 20
