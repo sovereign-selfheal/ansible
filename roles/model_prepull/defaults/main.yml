@@ -6,7 +6,7 @@
 
 model_prepull_namespace: sovereign-selfheal-prepull
 
-# `gpu` (Granite on the GPU nodes) or `cpu` (small Qwen on the workers). Same rule as
+# `gpu` (Qwen3.8 27B on the GPU nodes) or `cpu` (small Qwen on the workers). Same rule as
 # argocd_seed_model_profile.
 model_prepull_profile: "{{ 'gpu' if (gpu_enabled | default(true) | bool) else 'cpu' }}"
 
@@ -15,8 +15,8 @@ model_prepull_profile: "{{ 'gpu' if (gpu_enabled | default(true) | bool) else 'c
 # gitops/bootstrap/values.yaml; after the seed, tasks/verify.yml warns when they differ.
 model_prepull_images:
   gpu:
-    # granite-3.3-8b-instruct-20260805t2227z (gitops values.yaml, resolved on 2026-09-24)
-    modelcar: quay.io/redhat-ai-services/modelcar-catalog@sha256:735e0ff14f64d720566e24f21d8e5fa435f8dfcc3416b7614666f8f7d1fd8191
+    # qwen38-27b-nvfp4-d23c6ff (modelcar repo; gitops values.yaml, resolved on 2026-09-28)
+    modelcar: quay.io/sovereign-selfheal/modelcar-qwen38-27b-nvfp4@sha256:07490ed7b3ebbd8105de41712a61a3b206c862afdd48a60e7fde0b1f3a249661
     # RHOAI 3.5.1 template vllm-cuda-runtime-template
     runtime: registry.redhat.io/rhaii/vllm-cuda-rhel9@sha256:c056e61672b6aea489ad5dde0bd2f8497230f5333e87f7cf6c494eba3bfdc808
   cpu:

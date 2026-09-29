@@ -5,13 +5,19 @@
 ocp_preflight_required_version: "{{ ocp_min_version | default('4.22') }}"
 # Require a default StorageClass (RHOAI workbenches and model PVCs need one).
 ocp_preflight_require_default_storageclass: true
+# The local GPU model (Qwen3.8 27B NVFP4) needs native FP4, so an NVIDIA Blackwell GPU, and
+# about 96 GB of GPU memory for its 128k context. Smaller or older GPUs (L4, A10G, L40S, H100)
+# never get the InferenceService Ready.
 # GPU node check: only when GPU is enabled and the nodes are NOT created by this repo
-# (gpu_nodes_managed false). A node counts as a GPU node if it matches the label selector
-# OR its instance type matches the regex (NFD/GPU operator labels may not exist yet).
+# (gpu_nodes_managed false). A node counts as a GPU node if its instance type matches the regex
+# (NFD/GPU operator labels may not exist yet), OR it has the label selector and the GPU feature
+# discovery labels show a Blackwell GPU with enough memory.
 ocp_preflight_gpu_nodes_required: >-
   {{ (gpu_enabled | default(true) | bool) and not (gpu_nodes_managed | default(true) | bool) }}
 ocp_preflight_gpu_node_label_selector: nvidia.com/gpu.present=true
-ocp_preflight_gpu_instance_type_regex: '^(g4dn|g5|g6|g6e|gr6|p3|p4d|p4de|p5|p5e)\.'
+ocp_preflight_gpu_instance_type_regex: '^(g7e|p6-b200)\.'
+ocp_preflight_gpu_product_regex: 'Blackwell|B200'
+ocp_preflight_gpu_min_memory_mib: 90000       # label nvidia.com/gpu.memory; RTX PRO 6000: 97887
 ocp_preflight_gpu_min_nodes: 1
 # Catalog sources the enabled operators come from must be READY.
 ocp_preflight_catalog_sources: >-

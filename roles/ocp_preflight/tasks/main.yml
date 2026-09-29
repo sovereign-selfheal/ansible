@@ -85,6 +85,20 @@
       Resolve them with scripts/resolve-operator-versions.sh and set the pin in group_vars/all/main.yml.
     success_msg: Every enabled operator has a resolved pin
 
+# Managed GPU nodes (created by gpu_node_prep): the instance type must fit the model.
+- name: Assert the GPU instance type fits the local model
+  ansible.builtin.assert:
+    that:
+      - gpu_node_prep_instance_type | default('') is ansible.builtin.regex(ocp_preflight_gpu_instance_type_regex)
+    fail_msg: >-
+      gpu_node_prep_instance_type {{ gpu_node_prep_instance_type | default('(unset)') }} does not match
+      {{ ocp_preflight_gpu_instance_type_regex }}. The local model needs an NVIDIA Blackwell GPU with
+      about 96 GB (for example g7e.2xlarge).
+    success_msg: "GPU instance type {{ gpu_node_prep_instance_type }}"
+  when:
+    - gpu_enabled | default(true) | bool
+    - gpu_nodes_managed | default(true) | bool
+
 - name: GPU node check
   when: ocp_preflight_gpu_nodes_required | bool
   block:
@@ -102,8 +116,10 @@
           {%- set acc = namespace(names=[]) -%}
           {%- for node in ocp_preflight_nodes.resources -%}
           {%- set labels = node.metadata.labels | default({}) -%}
-          {%- if labels[ocp_preflight_label_key] | default(None) == ocp_preflight_label_value
-                or labels['node.kubernetes.io/instance-type'] | default('') is ansible.builtin.regex(ocp_preflight_gpu_instance_type_regex) -%}
+          {%- if labels['node.kubernetes.io/instance-type'] | default('') is ansible.builtin.regex(ocp_preflight_gpu_instance_type_regex)
+                or (labels[ocp_preflight_label_key] | default(None) == ocp_preflight_label_value
+                    and labels['nvidia.com/gpu.product'] | default('') is ansible.builtin.search(ocp_preflight_gpu_product_regex)
+                    and labels['nvidia.com/gpu.memory'] | default(0) | int >= ocp_preflight_gpu_min_memory_mib | int) -%}
           {%- set acc.names = acc.names + [node.metadata.name] -%}
           {%- endif -%}
           {%- endfor -%}
@@ -113,6 +129,8 @@
           - ocp_preflight_gpu_nodes | length >= ocp_preflight_gpu_min_nodes | int
         fail_msg: >-
           GPU nodes are required (gpu_enabled, gpu_nodes_managed false) but fewer than {{ ocp_preflight_gpu_min_nodes }} GPU node(s) found
-          (label {{ ocp_preflight_gpu_node_label_selector }} or instance type matching
-          {{ ocp_preflight_gpu_instance_type_regex }}). Add a GPU MachineSet first.
+          (instance type matching {{ ocp_preflight_gpu_instance_type_regex }}, or label {{ ocp_preflight_gpu_node_label_selector }}
+          with nvidia.com/gpu.product matching {{ ocp_preflight_gpu_product_regex }} and nvidia.com/gpu.memory
+          >= {{ ocp_preflight_gpu_min_memory_mib }} MiB). The local model needs an NVIDIA Blackwell GPU with
+          about 96 GB. Add a GPU MachineSet first.
         success_msg: "GPU nodes: {{ ocp_preflight_gpu_nodes | join(', ') }}"

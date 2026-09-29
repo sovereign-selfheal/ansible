@@ -6,7 +6,7 @@ Read [`AGENTS.md`](AGENTS.md) before changing anything.
 
 | Stage | Playbook | Status |
 |---|---|---|
-| Preflight (reachability, OCP 4.22, default StorageClass, catalogs, resolved pins, external GPU nodes, team users) | `playbooks/00-preflight.yml` | done |
+| Preflight (reachability, OCP 4.22, default StorageClass, catalogs, resolved pins, GPU instance type or external GPU nodes (Blackwell, about 96 GB), team users) | `playbooks/00-preflight.yml` | done |
 | Early nodes: GPU MachineSets without waiting ([`roles/gpu_node_prep`](roles/gpu_node_prep/README.md)), pre-pull of the model images ([`roles/model_prepull`](roles/model_prepull/README.md)) | `playbooks/05-early-nodes.yml` | done |
 | Operators (OLM, pinned CSV, Manual approval) | `playbooks/10-operators.yml` | done |
 | Team access, only with `team_users` in the vault: Keycloak users, OpenShift Group, cluster role ([`roles/team_access`](roles/team_access/README.md)) | `playbooks/15-identity.yml` | new, see [Team access](#team-access) |
@@ -200,9 +200,9 @@ change `channel`/`starting_csv` in `group_vars/all/main.yml` and run the playboo
 ## Model image pre-pull and GPU disk
 
 On a new cluster the model pod used to pull its images only at the end: after the operators, the
-GPU driver and the Argo CD sync, and one image after the other. Measured on 2026-09-26: modelcar
-(Granite, 16 GB) 12m12s, then vLLM CUDA 5m08s. The changes below aim to shorten this; the gain on
-a new cluster is not measured yet (see the limits below):
+GPU driver and the Argo CD sync, and one image after the other. Measured on 2026-09-26 with the
+previous local model: modelcar (Granite, 16 GB) 12m12s, then vLLM CUDA 5m08s. The changes below
+aim to shorten this; the gain on a new cluster is not measured yet (see the limits below):
 
 - **The GPU node starts in parallel with the operators.** `05-early-nodes.yml` creates the GPU
   MachineSets without waiting, so AWS builds the node while `10-operators.yml` runs.
@@ -215,7 +215,8 @@ a new cluster is not measured yet (see the limits below):
   starts as soon as the GPU node joins. Before the seed, `30-gitops-seed.yml` reports the pull
   (it does not wait: the model pod joins a pull in progress); after the seed it warns if the
   model uses other images than the pre-pulled ones.
-- **Bigger GPU disk.** The GPU root disk is 200 GiB (was 100 GiB, 57% full after the first pull).
+- **Bigger GPU disk.** The GPU root disk is 200 GiB (was 100 GiB, 57% full after the first pull
+  of Granite). With Qwen3.8 and vLLM the disk uses 69 of 214 GB after the first pull.
   This applies only to new Machines: scale the GPU MachineSet to 0 and back to 1 on an existing
   cluster (see [`roles/gpu_node_prep`](roles/gpu_node_prep/README.md)).
 
@@ -226,17 +227,23 @@ a new cluster is not measured yet (see the limits below):
 | `gpu_node_prep_volume_size` | `200` | GPU root disk (GiB) |
 | `gpu_node_prep_volume_iops` / `_throughput` | `""` | Empty = gp3 baseline (3000 IOPS, 125 MB/s) |
 
-Limits, measured on 2026-09-26 with a new GPU node (operators already installed):
+Limits, measured on 2026-09-29 with Qwen3.8 27B on a new `g7e.2xlarge` node (full `site.yml`
+run, 34m42s; node joined at 04:30, model Ready at 04:57):
 
-- The download itself does not get faster: the Granite modelcar is one gzip layer of 16 GB.
-  Alone it took 12m12s; in parallel with vLLM the node bandwidth is shared, so both images
-  together took 16m25s (vs 17m20s one after the other).
+- The download itself does not get faster: the Qwen3.8 modelcar has one gzip layer of 19.5 GB
+  (24.2 GB in all). The vLLM CUDA image took 7m53s and the modelcar 8m55s (after the restart
+  below), both in parallel. With Granite (2026-09-26) the 16 GB layer alone took 12m12s.
 - **The NVIDIA container toolkit restarts CRI-O** (`systemctl restart crio`) when the driver is
-  ready, about 9 minutes after the node joins. The restart stops every pull in progress, and
-  the pull starts again from zero (the 16 GB layer is not resumed). A pull that has not finished
+  ready, 9-11 minutes after the node joins. The restart stops every pull in progress, and the
+  pull starts again from zero (the model layer is not resumed). A pull that has not finished
   before the restart gains nothing; the pre-pull then restarts at once, still before the seed.
-- The model pod joins a pull in progress (the modelcar was ready 12 s after the pre-pull) and
-  finds the finished images (`already present on machine`).
+  On 2026-09-29 the vLLM image had finished before the restart and was kept; the modelcar pull
+  started again.
+- The model pod uses the finished vLLM image (`already present on machine`). For the modelcar it
+  started its own pull while the pre-pull was running; it finished about 3 minutes after the
+  pre-pull (2026-09-29).
+- After the pull, vLLM needs about 4 minutes to be Ready: weights 40 s, `torch.compile` 56 s,
+  engine start (KV cache, CUDA graphs) 128 s.
 
 To measure the effect, compare the `Pulling` -> `Pulled` events of the pre-pull pods and of the
 model pod on a new cluster:
