@@ -32,6 +32,12 @@ ingress_gateway_fallback_cert_secret: router-certs-default
 
 ingress_gateway_timeout: 600
 
+# Labels added to the Limitador metrics of the Gateway (TelemetryPolicy <gateway>-labels):
+# label name -> CEL expression. `tier` gives the tokens counted per API-key tier
+# (authorized_hits{tier="legal"}). Empty = no TelemetryPolicy.
+ingress_gateway_metric_labels:
+  tier: auth.tier.group
+
 # After the GitOps seed (tasks/verify.yml): every gateway pod must have loaded the Kuadrant
 # wasm module. A pod that fails the first fetch answers 503 to every request and never
 # retries, so it is deleted once and must come back with the module.

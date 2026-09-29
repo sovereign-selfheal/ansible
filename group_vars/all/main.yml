@@ -76,6 +76,10 @@ authorino_tls_enabled: true
 # replicas. The Authorino CR has no affinity field: spreading on nodes is the scheduler default.
 # Limitador stays at 1 replica: its counters are in memory, and more replicas would split them.
 authorino_replicas: 2
+# PodMonitor (Limitador) and ServiceMonitor (Authorino) for user workload monitoring. The
+# Kuadrant CR keeps spec.observability off: on RHCL 1.4.3 it creates a broken Istio PodMonitor
+# (TargetDown alerts, see templates/kuadrant-monitors.yaml.j2 of roles/olm_operator).
+kuadrant_metrics_enabled: true
 
 rhoai_dsc_name: default-dsc
 # DataScienceCluster v2 component states (RHOAI 3.5). Only what the demo needs is Managed.
@@ -280,6 +284,11 @@ operators:
           name: authorino
           namespace: "{{ kuadrant_namespace }}"
           condition: {type: Ready, status: "True"}
+      # Metrics of Limitador and Authorino (see the template for why not observability.enable).
+      - template: kuadrant-monitors.yaml.j2
+        enabled: "{{ kuadrant_metrics_enabled }}"
+        vars:
+          namespace: "{{ kuadrant_namespace }}"
 
   # 3b. RHCL dependencies. OLM creates their Subscriptions while it installs rhcl (Automatic,
   #     named <package>-<channel>-<source>-<source namespace>). These entries adopt them:

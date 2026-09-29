@@ -1,0 +1,20 @@
+---
+# Extra labels on the Limitador counters of every route of this Gateway (Kuadrant
+# TelemetryPolicy, extensions.kuadrant.io/v1alpha1; it targets a Gateway only). Each value is
+# a CEL expression; a label is added only when its expression resolves, so routes without it
+# are not changed. `auth.tier.group` is the `tier` filter of the AuthPolicy litellm-apikey in
+# the gitops repo (component frontdoor): rename both together.
+apiVersion: extensions.kuadrant.io/v1alpha1
+kind: TelemetryPolicy
+metadata:
+  name: {{ ingress_gateway_name }}-labels
+  namespace: {{ ingress_gateway_namespace }}
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: {{ ingress_gateway_name }}
+  metrics:
+    default:
+      labels:
+        {{ ingress_gateway_metric_labels | to_nice_yaml(indent=2) | indent(8) }}

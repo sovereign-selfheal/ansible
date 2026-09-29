@@ -268,6 +268,8 @@ The demo shows each routing decision as a trace (console: *Observe → Traces*) 
 | Namespace `observability` (label `argocd.argoproj.io/managed-by`) | `roles/argocd_seed` | always created |
 | Argo CD health check for `TempoMonolithic` | `roles/argocd_seed/files/health-tempo.lua` | always |
 | User workload monitoring (`enableUserWorkload: true`) | `roles/user_workload_monitoring` | `user_workload_monitoring_enabled` (default `true`) |
+| Metrics of Limitador and Authorino (PodMonitor `limitador`, ServiceMonitor `authorino` in `kuadrant-system`) | post-install of `rhcl` (`templates/kuadrant-monitors.yaml.j2`) | `kuadrant_metrics_enabled` (default `true`) |
+| Label `tier` on the Limitador counters (`TelemetryPolicy` `openshift-ai-inference-labels` on the Gateway): tokens counted per API-key tier | `roles/ingress_gateway` | `ingress_gateway_metric_labels` (empty = no policy) |
 | Console menu links to the router traces, already filtered (`ConsoleLink`, section *Sovereign Self-Healing demo*) | [`roles/console_links`](roles/console_links/README.md), stage 30 | `observability_enabled` |
 
 The seed passes `observability.enabled` (from `observability_enabled`) and `namespaces.observability`
@@ -277,6 +279,17 @@ the OpenTelemetry collector `otel` (OTLP on `otel-collector.observability.svc:43
 the collector writes the tenant `router` with its service account token, and a user needs the read
 permission on the tenant to see the traces (cluster-admin has it). Traces and metrics stay in the
 cluster: nothing is sent outside.
+
+**Workaround: the Kuadrant CR keeps `spec.observability` off.** On RHCL 1.4.3 (the latest version in the
+`stable` channel on 2026-09-29) `observability.enable: true` also creates the PodMonitor
+`openshift-ingress/istio-pod-monitor`. Its address regex is double-escaped, so Prometheus scrapes every
+port of the gateway pods, also the status port 15021, which answers 404 on `/stats/prometheus`; the
+monitor also finds pods in every namespace. `TargetDown` fires after 15 minutes (seen on ocp.bvdk2 on
+2026-09-29). Upstream fixes: [kuadrant-operator PR #2147](https://github.com/Kuadrant/kuadrant-operator/pull/2147)
+(regex, in v1.4.7 and v1.6.0) and [issue #1920](https://github.com/Kuadrant/kuadrant-operator/issues/1920)
+(namespace scope, in v1.5). This repo creates only the two monitors it needs (table above). The metrics
+of the gateway pods are already scraped by the RHOAI PodMonitor `openshift-ai-inference-metrics`. Check
+again when RHCL ships kuadrant-operator 1.4.7 or later.
 
 With `observability_enabled: false` the three operators are not installed and the gitops repo deploys
 no Tempo instance and no collector; the router still works and still exposes its metrics.
