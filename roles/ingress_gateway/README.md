@@ -32,11 +32,17 @@ to every request (Envoy access log: `wasm_fail_stream`) and stays broken. This h
 2026-09-29 on one of the two pods. The Route is passthrough and HAProxy balances by source IP, so
 some clients always reached the broken pod and got only errors.
 
-The check reads `wasm.remote_load_fetch_successes` from the Envoy stats of every gateway pod
-(`pilot-agent request GET stats`). A probe of the public host is not enough: it reaches one pod
-only. Pods with no successful download are deleted once. The Deployment creates new pods, which
-download the module again. The play fails if a new pod has no module either: then check the
-Service `kuadrant-operator-wasm`. On a healthy cluster the check changes nothing.
+The check reads `wasm.remote_load_fetch_successes` and `_failures` from the Envoy stats of every
+gateway pod (`pilot-agent request GET stats`). A probe of the public host is not enough: it
+reaches one pod only. A pod is healthy with at least one download and no failed one. Pods with a
+failed download are deleted once. The Deployment creates new pods, which download the module
+again. The play fails if a new pod fails again, if a pod makes no download attempt within
+`ingress_gateway_wasm_wait_timeout`, if the Envoy stats cannot be read, or if no gateway pod is
+running. Then check the Service `kuadrant-operator-wasm`. On a healthy cluster the check changes
+nothing.
+
+The check runs only after the seed. A gateway pod recreated later (node drain, upgrade) is not
+repaired: validation check P18 finds it, and `oc delete pod` fixes it.
 
 Run it alone: `scripts/run-playbook.sh playbooks/30-gitops-seed.yml --tags ingress_gateway`.
 
