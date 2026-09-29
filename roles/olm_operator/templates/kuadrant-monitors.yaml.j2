@@ -1,0 +1,48 @@
+---
+# Metrics of Limitador (token counters per limit: authorized_hits, authorized_calls,
+# limited_calls) and Authorino (auth_server_* on /server-metrics), scraped by user workload
+# monitoring. With the TelemetryPolicy of roles/ingress_gateway the Limitador counters also
+# carry the label `tier`.
+# These monitors replace spec.observability.enable of the Kuadrant CR, which stays off: on
+# RHCL 1.4.3 it also creates an Istio PodMonitor that scrapes the status port 15021 of every
+# gateway pod (double-escaped regex, kuadrant-operator PR #2147, fixed upstream in v1.4.7)
+# and discovers pods in every namespace (issue #1920, fixed upstream in v1.5), so TargetDown
+# fires. Check again when RHCL ships kuadrant-operator 1.4.7 or later.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: limitador
+  namespace: {{ namespace }}
+spec:
+  namespaceSelector:
+    matchNames:
+      - {{ namespace }}
+  selector:
+    matchLabels:
+      app: limitador
+      limitador-resource: limitador
+  podMetricsEndpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: authorino
+  namespace: {{ namespace }}
+spec:
+  namespaceSelector:
+    matchNames:
+      - {{ namespace }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: metrics
+      authorino-resource: authorino
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+    - port: http
+      path: /server-metrics
+      interval: 30s

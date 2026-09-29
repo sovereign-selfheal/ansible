@@ -1,9 +1,10 @@
 ---
-# Read wasm.remote_load_fetch_{successes,failures} from the Envoy of every running gateway pod.
-# Waits until each pod has tried the download once. Sets:
+# Read wasm.remote_load_fetch_{successes,failures} and wasmcustom.kuadrant.configs from the
+# Envoy of every running gateway pod. Waits until each pod has tried the download once or runs
+# the module. Sets:
 #   ingress_gateway_wasm_pods        all pods read (names)
 #   ingress_gateway_wasm_broken      pods with a failed download (failures > 0)
-#   ingress_gateway_wasm_untried     pods with no download attempt after the wait
+#   ingress_gateway_wasm_untried     pods with no download and no running module after the wait
 #   ingress_gateway_wasm_unreadable  pods whose stats could not be read (still running)
 
 - name: Read the gateway pods
@@ -26,14 +27,19 @@
         namespace: "{{ ingress_gateway_namespace }}"
         pod: "{{ ingress_gateway_pod.metadata.name }}"
         container: "{{ ingress_gateway_proxy_container }}"
-        command: pilot-agent request GET stats?filter=wasm.remote_load_fetch_
+        # remote_load_fetch_*: download of the module. They disappear when Kuadrant updates its
+        # EnvoyFilter (any policy change): Envoy then reloads the module from its cache.
+        # wasmcustom.kuadrant.configs: set by the module itself, so it exists only while the
+        # module runs; a pod whose download failed never has it.
+        command: pilot-agent request GET stats?filter=remote_load_fetch_|wasmcustom.kuadrant.configs
       register: ingress_gateway_wasm_exec
       changed_when: false
       failed_when: false
       until: >-
         (ingress_gateway_wasm_exec.rc | default(1) | int != 0)
         or (ingress_gateway_wasm_exec.stdout | default('')
-            | regex_findall('remote_load_fetch_(?:successes|failures): ([0-9]+)') | map('int') | sum) > 0
+            | regex_findall('(?:remote_load_fetch_successes|remote_load_fetch_failures|kuadrant\\.configs): ([0-9]+)')
+            | map('int') | sum) > 0
       retries: "{{ ((ingress_gateway_wasm_wait_timeout | int) / (ingress_gateway_wasm_poll_delay | int)) | round(0, 'ceil') | int }}"
       delay: "{{ ingress_gateway_wasm_poll_delay }}"
       loop: "{{ ingress_gateway_pods.resources | rejectattr('metadata.deletionTimestamp', 'defined') | list }}"
@@ -55,7 +61,8 @@
             'pod': r.ingress_gateway_pod.metadata.name,
             'read': (r.rc | default(1) | int) == 0,
             'successes': out | regex_findall('remote_load_fetch_successes: ([0-9]+)') | map('int') | sum,
-            'failures': out | regex_findall('remote_load_fetch_failures: ([0-9]+)') | map('int') | sum}] -%}
+            'failures': out | regex_findall('remote_load_fetch_failures: ([0-9]+)') | map('int') | sum,
+            'configs': out | regex_findall('kuadrant\\.configs: ([0-9]+)') | map('int') | sum}] -%}
       {%- endfor -%}
       {{ acc.items }}
 
@@ -77,12 +84,13 @@
     ingress_gateway_read: "{{ ingress_gateway_wasm_state | selectattr('read') | list }}"
   ansible.builtin.set_fact:
     ingress_gateway_wasm_pods: "{{ ingress_gateway_wasm_state | map(attribute='pod') | list }}"
-    # Healthy: at least one download and no failed one. A failed download (even after a good
-    # one, for example a new module version) leaves the filter answering 503.
+    # Healthy: no failed download, and a good download or the module running (configs > 0).
+    # A failed download (even after a good one, for example a new module version) leaves the
+    # filter answering 503.
     ingress_gateway_wasm_broken: "{{ ingress_gateway_read | selectattr('failures', 'gt', 0) | map(attribute='pod') | list }}"
     ingress_gateway_wasm_untried: >-
       {{ ingress_gateway_read | selectattr('failures', 'eq', 0) | selectattr('successes', 'eq', 0)
-         | map(attribute='pod') | list }}
+         | selectattr('configs', 'eq', 0) | map(attribute='pod') | list }}
     ingress_gateway_wasm_unreadable: >-
       {{ ingress_gateway_wasm_state | rejectattr('read') | map(attribute='pod') | select('in', ingress_gateway_live) | list }}
 
@@ -90,7 +98,8 @@
   ansible.builtin.debug:
     msg: >-
       {{ ingress_gateway_wasm_item.pod }}:
-      {{ ('successes ' ~ ingress_gateway_wasm_item.successes ~ ', failures ' ~ ingress_gateway_wasm_item.failures)
+      {{ ('successes ' ~ ingress_gateway_wasm_item.successes ~ ', failures ' ~ ingress_gateway_wasm_item.failures
+          ~ ', kuadrant configs ' ~ ingress_gateway_wasm_item.configs)
          if ingress_gateway_wasm_item.read else 'stats not readable' }}
   loop: "{{ ingress_gateway_wasm_state }}"
   loop_control:
