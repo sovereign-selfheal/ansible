@@ -3,6 +3,8 @@
   ansible.builtin.debug:
     msg: >-
       enableUserWorkload: true in {{ user_workload_monitoring_config_namespace }}/{{ user_workload_monitoring_config_name }},
+      Prometheus retention {{ user_workload_monitoring_retention or 'default' }}, volume
+      {{ user_workload_monitoring_storage_size or 'none' }},
       then wait for Prometheus in {{ user_workload_monitoring_namespace }}
 
 - name: Read the cluster monitoring configuration
@@ -36,6 +38,55 @@
         config.yaml: "{{ user_workload_monitoring_current | combine({'enableUserWorkload': true}) | to_nice_yaml(indent=2) }}"
   when: not (user_workload_monitoring_current.enableUserWorkload | default(false) | bool)
 
+- name: Read the user workload monitoring configuration
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: ConfigMap
+    name: "{{ user_workload_monitoring_uwm_config_name }}"
+    namespace: "{{ user_workload_monitoring_namespace }}"
+  register: user_workload_monitoring_uwm_cm
+
+- name: Build the Prometheus settings
+  vars:
+    user_workload_monitoring_uwm_raw: >-
+      {{ ((user_workload_monitoring_uwm_cm.resources | first).data | default({})).get('config.yaml', '')
+         if user_workload_monitoring_uwm_cm.resources | length > 0 else '' }}
+    user_workload_monitoring_retention_keys: >-
+      {{ {'retention': user_workload_monitoring_retention, 'retentionSize': user_workload_monitoring_retention_size}
+         if user_workload_monitoring_retention | length > 0 else {} }}
+    user_workload_monitoring_pvc_spec: >-
+      {{ {'resources': {'requests': {'storage': user_workload_monitoring_storage_size}}}
+         | combine({'storageClassName': user_workload_monitoring_storage_class}
+                   if user_workload_monitoring_storage_class | length > 0 else {}) }}
+    user_workload_monitoring_volume_keys: >-
+      {{ {'volumeClaimTemplate': {'spec': user_workload_monitoring_pvc_spec}}
+         if user_workload_monitoring_storage_size | length > 0 else {} }}
+  ansible.builtin.set_fact:
+    user_workload_monitoring_uwm_current: "{{ (user_workload_monitoring_uwm_raw | from_yaml) or {} }}"
+    user_workload_monitoring_uwm_prometheus: "{{ user_workload_monitoring_retention_keys | combine(user_workload_monitoring_volume_keys) }}"
+
+# Write only when a value differs: an unchanged ConfigMap gives changed=0. The monitoring operator
+# then recreates the Prometheus pods with the new settings (the metrics of an emptyDir are lost
+# once, when the volume is added).
+- name: Set the retention and the volume of the user workload Prometheus, keep the other settings
+  vars:
+    user_workload_monitoring_uwm_wanted: >-
+      {{ user_workload_monitoring_uwm_current
+         | combine({'prometheus': user_workload_monitoring_uwm_prometheus}, recursive=true) }}
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: "{{ user_workload_monitoring_uwm_config_name }}"
+        namespace: "{{ user_workload_monitoring_namespace }}"
+      data:
+        config.yaml: "{{ user_workload_monitoring_uwm_wanted | to_nice_yaml(indent=2) }}"
+  when:
+    - user_workload_monitoring_uwm_prometheus | length > 0
+    - user_workload_monitoring_uwm_wanted != user_workload_monitoring_uwm_current
+
 - name: Wait for the user workload Prometheus
   when: not ansible_check_mode
   block:
@@ -62,6 +113,18 @@
         - (user_workload_monitoring_sts.resources | first).status.readyReplicas | default(0) > 0
         - >-
           (user_workload_monitoring_sts.resources | first).status.readyReplicas | default(0)
+          == (user_workload_monitoring_sts.resources | first).spec.replicas
+        # The operator applies the settings above: the pods must run with them.
+        - >-
+          user_workload_monitoring_retention | length == 0
+          or ('--storage.tsdb.retention.time=' ~ user_workload_monitoring_retention)
+             in ((user_workload_monitoring_sts.resources | first).spec.template.spec.containers
+                 | selectattr('name', 'eq', 'prometheus') | map(attribute='args') | first | default([]))
+        - >-
+          user_workload_monitoring_storage_size | length == 0
+          or (user_workload_monitoring_sts.resources | first).spec.volumeClaimTemplates | default([]) | length > 0
+        - >-
+          (user_workload_monitoring_sts.resources | first).status.updatedReplicas | default(0)
           == (user_workload_monitoring_sts.resources | first).spec.replicas
       retries: "{{ ((user_workload_monitoring_timeout | int) / (user_workload_monitoring_poll_delay | int)) | round(0, 'ceil') | int }}"
       delay: "{{ user_workload_monitoring_poll_delay }}"
