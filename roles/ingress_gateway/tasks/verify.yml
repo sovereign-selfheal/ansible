@@ -6,8 +6,11 @@
 # 503 (access log: wasm_fail_stream). Seen on 2026-09-29 on one of the two pods.
 # The Route is passthrough and HAProxy balances by source IP, so a probe of the public host
 # reaches one pod only: the Envoy stats of each pod are the reliable check.
-# A pod is healthy with wasm.remote_load_fetch_successes >= 1 and _failures 0. Pods with a
-# failed download are deleted once; the Deployment creates new pods, which download again.
+# A pod is healthy with wasm.remote_load_fetch_failures 0 and either _successes >= 1 or
+# wasmcustom.kuadrant.configs > 0 (the module runs). The fetch stats disappear when Kuadrant
+# updates its EnvoyFilter (for example a new policy): Envoy reloads the module from its cache
+# and does not download it again. Pods with a failed download are deleted once; the Deployment
+# creates new pods, which download again.
 # This runs only here, after the seed: a pod recreated later is checked by validation P18.
 
 - name: Wait until every gateway pod has tried to download the wasm module
