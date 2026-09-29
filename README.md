@@ -6,7 +6,7 @@ Read [`AGENTS.md`](AGENTS.md) before changing anything.
 
 | Stage | Playbook | Status |
 |---|---|---|
-| Preflight (reachability, OCP 4.22, default StorageClass, catalogs, resolved pins, external GPU nodes, team users) | `playbooks/00-preflight.yml` | done |
+| Preflight (reachability, OCP 4.22, default StorageClass, catalogs, resolved pins, GPU instance type or external GPU nodes (Blackwell, about 96 GB), team users) | `playbooks/00-preflight.yml` | done |
 | Early nodes: GPU MachineSets without waiting ([`roles/gpu_node_prep`](roles/gpu_node_prep/README.md)), pre-pull of the model images ([`roles/model_prepull`](roles/model_prepull/README.md)) | `playbooks/05-early-nodes.yml` | done |
 | Operators (OLM, pinned CSV, Manual approval) | `playbooks/10-operators.yml` | done |
 | Team access, only with `team_users` in the vault: Keycloak users, OpenShift Group, cluster role ([`roles/team_access`](roles/team_access/README.md)) | `playbooks/15-identity.yml` | new, see [Team access](#team-access) |
