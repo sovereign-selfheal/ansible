@@ -1,0 +1,83 @@
+---
+# After the seed: every gateway pod must have loaded the Kuadrant wasm module.
+# Kuadrant adds the wasm filter to the Gateway when gitops applies the AuthPolicy. Each Envoy
+# downloads the module from the kuadrant-operator-wasm Service, with no retry. A pod whose
+# download fails keeps the filter with failure_policy FAIL_RELOAD and answers every request with
+# 503 (access log: wasm_fail_stream). Seen on 2026-09-29 on one of the two pods.
+# The Route is passthrough and HAProxy balances by source IP, so a probe of the public host
+# reaches one pod only: the Envoy stats of each pod are the reliable check.
+# A pod is healthy with wasm.remote_load_fetch_successes >= 1 and _failures 0. Pods with a
+# failed download are deleted once; the Deployment creates new pods, which download again.
+# This runs only here, after the seed: a pod recreated later is checked by validation P18.
+
+- name: Wait until every gateway pod has tried to download the wasm module
+  ansible.builtin.include_tasks: wasm_stats.yml
+
+- name: Remember the pods to delete
+  ansible.builtin.set_fact:
+    ingress_gateway_wasm_deleted: "{{ ingress_gateway_wasm_broken }}"
+    ingress_gateway_wasm_before: "{{ ingress_gateway_wasm_pods }}"
+
+- name: Delete the gateway pods with a failed wasm download
+  kubernetes.core.k8s:
+    state: absent
+    api_version: v1
+    kind: Pod
+    name: "{{ ingress_gateway_broken_pod }}"
+    namespace: "{{ ingress_gateway_namespace }}"
+    wait: false
+  loop: "{{ ingress_gateway_wasm_deleted }}"
+  loop_control:
+    loop_var: ingress_gateway_broken_pod
+
+- name: Check the new gateway pods
+  when: ingress_gateway_wasm_deleted | length > 0
+  block:
+    # The old pods drain for up to ingress_gateway_drain_seconds, so wait for the new pods
+    # (not listed before the delete), not for the deletion.
+    - name: Wait until the new gateway pods are Ready
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Pod
+        namespace: "{{ ingress_gateway_namespace }}"
+        label_selectors:
+          - "{{ ingress_gateway_pod_selector }}"
+        field_selectors:
+          - status.phase=Running
+      register: ingress_gateway_new_pods
+      until: >-
+        (ingress_gateway_new_pods.resources
+         | rejectattr('metadata.deletionTimestamp', 'defined')
+         | rejectattr('metadata.name', 'in', ingress_gateway_wasm_before)
+         | map(attribute='status.conditions', default=[])
+         | map('selectattr', 'type', 'equalto', 'Ready') | map('selectattr', 'status', 'equalto', 'True')
+         | map('list') | reject('equalto', []) | list | length)
+        >= ingress_gateway_wasm_deleted | length
+      retries: "{{ ((ingress_gateway_wasm_wait_timeout | int) / (ingress_gateway_wasm_poll_delay | int)) | round(0, 'ceil') | int }}"
+      delay: "{{ ingress_gateway_wasm_poll_delay }}"
+
+    - name: Read the wasm download stats of the new gateway pods
+      ansible.builtin.include_tasks: wasm_stats.yml
+
+- name: Assert every gateway pod has the wasm module
+  ansible.builtin.assert:
+    that:
+      - ingress_gateway_wasm_pods | length > 0
+      - ingress_gateway_wasm_broken | length == 0
+      - ingress_gateway_wasm_untried | length == 0
+      - ingress_gateway_wasm_unreadable | length == 0
+    fail_msg: >-
+      {{ 'No running gateway pod with the label ' ~ ingress_gateway_pod_selector ~ '. '
+         if ingress_gateway_wasm_pods | length == 0 else '' -}}
+      {{ 'Failed wasm download (they answer 503 wasm_fail_stream): ' ~ (ingress_gateway_wasm_broken | join(', ')) ~ '. '
+         if ingress_gateway_wasm_broken | length > 0 else '' -}}
+      {{ 'No wasm download attempt within ' ~ ingress_gateway_wasm_wait_timeout ~ ' s (is the Kuadrant AuthPolicy applied?): '
+         ~ (ingress_gateway_wasm_untried | join(', ')) ~ '. ' if ingress_gateway_wasm_untried | length > 0 else '' -}}
+      {{ 'Envoy stats not readable (container ' ~ ingress_gateway_proxy_container ~ '): '
+         ~ (ingress_gateway_wasm_unreadable | join(', ')) ~ '. ' if ingress_gateway_wasm_unreadable | length > 0 else '' -}}
+      {{ 'Check the Service kuadrant-operator-wasm in openshift-operators, then delete the broken pods.'
+         if (ingress_gateway_wasm_broken + ingress_gateway_wasm_untried) | length > 0 else '' }}
+    success_msg: >-
+      {{ ingress_gateway_wasm_pods | length }} gateway pod(s) loaded the Kuadrant wasm module{{
+      ' (' ~ (ingress_gateway_wasm_deleted | join(', ')) ~ ' deleted and recreated)'
+      if ingress_gateway_wasm_deleted | length > 0 else '' }}

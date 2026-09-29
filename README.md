@@ -11,7 +11,7 @@ Read [`AGENTS.md`](AGENTS.md) before changing anything.
 | Operators (OLM, pinned CSV, Manual approval) | `playbooks/10-operators.yml` | done |
 | Team access, only with `team_users` in the vault: Keycloak users, OpenShift Group, cluster role ([`roles/team_access`](roles/team_access/README.md)) | `playbooks/15-identity.yml` | new, see [Team access](#team-access) |
 | Cluster prerequisites: inference Gateway and Route ([`roles/ingress_gateway`](roles/ingress_gateway/README.md)), secret values for ESO ([`roles/secrets_bootstrap`](roles/secrets_bootstrap/README.md)), user workload monitoring ([`roles/user_workload_monitoring`](roles/user_workload_monitoring/README.md)), wait for the GPU nodes ([`roles/gpu_node_prep`](roles/gpu_node_prep/README.md)) | `playbooks/20-prereqs.yml` | done |
-| GitOps seed: namespaces, Argo CD health checks, root Application ([`roles/argocd_seed`](roles/argocd_seed/README.md)), console links to the traces ([`roles/console_links`](roles/console_links/README.md)) | `playbooks/30-gitops-seed.yml` | done |
+| GitOps seed: namespaces, Argo CD health checks, root Application ([`roles/argocd_seed`](roles/argocd_seed/README.md)), Kuadrant wasm module on every gateway pod ([`roles/ingress_gateway`](roles/ingress_gateway/README.md#after-the-seed-kuadrant-wasm-module)), console links to the traces ([`roles/console_links`](roles/console_links/README.md)) | `playbooks/30-gitops-seed.yml` | done |
 | Teardown | `playbooks/99-destroy.yml` | todo |
 
 ## Operators

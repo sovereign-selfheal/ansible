@@ -1,7 +1,8 @@
 ---
 # Create the root Argo CD Application that points to the gitops repo, after the
 # workload namespaces and the Argo CD health checks. Needs sota_api_base and sota_model.
-# Before the seed: report the model pre-pull (no wait). After: check that the model uses
+# Before the seed: report the model pre-pull (no wait). After: check that every gateway pod
+# loaded the Kuadrant wasm module (recreate the pods that did not), check that the model uses
 # the pre-pulled images, and add the console menu links to the router traces.
 - name: GitOps seed
   hosts: localhost
@@ -21,6 +22,18 @@
         name: argocd_seed
         apply:
           tags: [argocd_seed]
+      tags: always
+
+    - name: Check that every gateway pod loaded the Kuadrant wasm module
+      ansible.builtin.include_role:
+        name: ingress_gateway
+        tasks_from: verify
+        apply:
+          tags: [ingress_gateway]
+      # Only after a seed that waited for the workloads: the wasm filter comes with them.
+      when:
+        - argocd_seed_wait | default(true) | bool
+        - not ansible_check_mode
       tags: always
 
     - name: Add the trace links to the console menu
