@@ -1,5 +1,5 @@
 ---
-# After the seed: the model pod must use the same images as the pre-pull, otherwise the
+# After the seed: the model pods (local model and, when enabled, decision model) must use the same images as the pre-pull, otherwise the
 # pre-pull downloads images nobody uses (the digests in gitops values.yaml changed).
 # Warns, never fails.
 
@@ -27,12 +27,13 @@
 
 - name: Report the images of the model server
   vars:
-    model_prepull_missing: "{{ model_prepull_used | difference(model_prepull_images[model_prepull_profile].values() | list) }}"
+    model_prepull_missing: "{{ model_prepull_used | difference(model_prepull_entries | map(attribute='image') | list) }}"
   ansible.builtin.debug:
     msg: >-
       {{ 'The model server uses the pre-pulled images: ' ~ (model_prepull_used | join(', '))
          if model_prepull_missing | length == 0 else
          'WARNING: the model server uses images that are not pre-pulled: ' ~ (model_prepull_missing | join(', '))
-         ~ '. Update model_prepull_images.' ~ model_prepull_profile ~ ' (roles/model_prepull/defaults/main.yml)'
-         ~ ' to match localModel.profiles.' ~ model_prepull_profile ~ ' in gitops/bootstrap/values.yaml.' }}
+         ~ '. Update model_prepull_images.' ~ model_prepull_profile ~ ' (and model_prepull_decision_images)'
+         ~ ' in roles/model_prepull/defaults/main.yml to match localModel.profiles.' ~ model_prepull_profile
+         ~ ' (and decisionModel) in gitops/bootstrap/values.yaml.' }}
   when: model_prepull_predictor.resources | length > 0

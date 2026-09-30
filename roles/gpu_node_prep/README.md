@@ -1,21 +1,33 @@
 # gpu_node_prep
 
-Creates one GPU MachineSet per availability zone on OpenShift on AWS.
-To keep costs low, only the first `gpu_node_prep_active_zone_count` zones get machines. The
+Creates GPU pools on OpenShift on AWS. Each pool has one MachineSet per availability zone.
+To keep costs low, only the first `active_zone_count` zones of a pool get machines. The
 other MachineSets are created with 0 replicas, so you can scale them later.
+
+| Pool | When | Instance | Node label | For |
+|---|---|---|---|---|
+| `gpu` | always | `g7e.2xlarge` (RTX PRO 6000 Blackwell, 96 GB) | `node-role.kubernetes.io/gpu` | the local model (Qwen3.8) |
+| `gpu-decision` | `decision_model_enabled` | `g6e.2xlarge` (L40S, 48 GB) | `node-role.kubernetes.io/gpu-decision` | the decision model (DiffusionGemma) |
+
+Both pools use the taint `nvidia.com/gpu=true:NoSchedule`. The node labels keep the two models
+apart: each model selects the label of its own pool.
 
 ## How it works
 
 1. Reads the `Infrastructure` object and checks that the platform is AWS.
 2. For each zone, picks the first worker MachineSet (sorted by name) as the source.
-3. Creates `<infra-id>-gpu-<zone>`: a copy of the source `providerSpec` with a different
-   `instanceType` and a bigger root disk (see "Root disk"), plus the GPU node labels and taints.
-4. Waits until the expected machines are `Running` and the nodes are `Ready`. If a machine
-   goes to `Failed` (for example, AWS quota or no capacity in the zone), the play stops and
-   shows the AWS error message.
-5. Waits until every GPU node exposes `nvidia.com/gpu`, that is, the NVIDIA driver is built
-   and the device plugin runs. This step needs the GPU operator, so the waits run in stage 20,
-   after the operators (stage 10).
+3. For each pool, creates `<infra-id>-<pool>-<zone>` (for example `<infra-id>-gpu-us-east-2a`
+   and `<infra-id>-gpu-decision-us-east-2a`): a copy of the source `providerSpec` with a
+   different `instanceType` and a bigger root disk (see "Root disk"), plus the node labels and
+   taints of the pool. The Machines carry `cluster-api-machine-type: <pool>`.
+4. For each pool, waits until the expected machines are `Running` and the nodes are `Ready`.
+   If a machine goes to `Failed` (for example, AWS quota), the play stops and shows the AWS
+   error message. A machine without capacity in the zone stays `Provisioning` instead: the wait
+   then runs until its timeout (see "Notes").
+5. For each pool, waits until every node exposes `nvidia.com/gpu`, that is, the NVIDIA driver
+   is built and the device plugin runs, and checks the GPU memory (GFD label
+   `nvidia.com/gpu.memory`) against the minimum of the pool. This step needs the GPU operator,
+   so the waits run in stage 20, after the operators (stage 10).
 6. Waits until the NVIDIA `ClusterPolicy` is `ready`. After a new node joins, the metrics
    components (`dcgm`, `dcgm-exporter`) need about one more minute. When the play ends, the
    GPU stack is fully ready.
@@ -43,6 +55,16 @@ works on a new cluster in a different region without changes.
 | `gpu_node_prep_volume_type` | `gp3` | EBS volume type of the root disk |
 | `gpu_node_prep_volume_iops` | `""` | Root disk IOPS; empty keeps the source value (gp3 baseline 3000) |
 | `gpu_node_prep_volume_throughput` | `""` | Root disk throughput in MB/s (gp3 only); empty = gp3 baseline 125 |
+| `gpu_node_prep_min_gpu_memory_mib` | `90000` | Minimum GPU memory of the `gpu` pool (RTX PRO 6000: 97887) |
+| `gpu_node_prep_decision_enabled` | `decision_model_enabled` (`false`) | Add the `gpu-decision` pool |
+| `gpu_node_prep_decision_instance_type` | `g6e.2xlarge` | One NVIDIA L40S 48 GB, 8 vCPU, 64 GiB. Not `g6e.xlarge`: vLLM uses 31 GiB of host memory after the load |
+| `gpu_node_prep_decision_zones` | `[]` | Zones of the decision pool; empty means every worker zone |
+| `gpu_node_prep_decision_active_zone_count` | `1` | Zones of the decision pool that get machines |
+| `gpu_node_prep_decision_replicas` | `1` | Machines per active zone; `0` scales the decision MachineSets down |
+| `gpu_node_prep_decision_volume_size` | `100` | Root disk of the decision nodes in GiB (gp3 baseline) |
+| `gpu_node_prep_decision_node_labels` | `node-role.kubernetes.io/gpu-decision: ""` | Labels of the decision nodes |
+| `gpu_node_prep_decision_min_gpu_memory_mib` | `40000` | Minimum GPU memory of the decision pool (L40S: 46068) |
+| `gpu_node_prep_pools` | built from the variables above | The pools; override only to add a pool of your own |
 | `gpu_node_prep_wait` | `true` | `false`: create or scale the MachineSets and return (steps 1-3) |
 | `gpu_node_prep_timeout` | `1500` | Seconds to wait for the machines |
 | `gpu_node_prep_wait_gpu_allocatable` | `true` | Wait until the nodes expose `nvidia.com/gpu` |
@@ -80,8 +102,18 @@ scripts/run-playbook.sh playbooks/20-prereqs.yml --tags gpu_node_prep
 # run site.yml, or 10-operators.yml before this)
 scripts/run-playbook.sh playbooks/20-prereqs.yml
 
-# scale every GPU MachineSet to 0 (stops the EC2 costs, keeps the MachineSets)
+# scale the gpu pool to 0 (stops the EC2 costs, keeps the MachineSets)
 scripts/run-playbook.sh playbooks/20-prereqs.yml -e gpu_node_prep_replicas=0
+
+# add the decision pool (one g6e.2xlarge in the first zone)
+scripts/run-playbook.sh playbooks/20-prereqs.yml -e decision_model_enabled=true
+
+# decision pool in a specific zone, for example when the first zone has no g6e capacity
+scripts/run-playbook.sh playbooks/20-prereqs.yml -e decision_model_enabled=true \
+  -e '{"gpu_node_prep_decision_zones": ["us-east-2a", "us-east-2b", "us-east-2c"]}'
+
+# scale the decision pool to 0
+scripts/run-playbook.sh playbooks/20-prereqs.yml -e decision_model_enabled=true -e gpu_node_prep_decision_replicas=0
 
 # GPU in a specific zone, for example when the first zone has no capacity
 scripts/run-playbook.sh playbooks/20-prereqs.yml -e '{"gpu_node_prep_zones": ["us-east-2b", "us-east-2a", "us-east-2c"]}'
@@ -92,6 +124,12 @@ scripts/run-playbook.sh playbooks/20-prereqs.yml -e '{"gpu_node_prep_zones": ["u
 - The instance type must exist in the cluster's region and zones. If it does not, the machine
   goes to `Failed` and the play shows the AWS error. Change `gpu_node_prep_instance_type` or
   the zone order.
+- With no capacity for the instance type in a zone, AWS answers `InsufficientInstanceCapacity`
+  and the Machine stays `Provisioning` (it never goes to `Failed`). Watch the events of the
+  Machine (`oc get events -n openshift-machine-api`) and change the zone order. On 2026-09-30
+  `g6e.2xlarge` had no capacity in us-east-2b; us-east-2a had it at once.
+- With `decision_model_enabled: false` the role does not read or change the decision
+  MachineSets. To stop a decision node, scale it to 0 with the flag on (see "Usage").
 - The role runs only when `gpu_enabled` and `gpu_nodes_managed` are both true.
 - GPU workloads (for example vLLM) must tolerate the `nvidia.com/gpu` taint. The NVIDIA
   daemonsets tolerate it by default.

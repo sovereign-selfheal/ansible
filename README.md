@@ -6,8 +6,8 @@ Read [`AGENTS.md`](AGENTS.md) before changing anything.
 
 | Stage | Playbook | Status |
 |---|---|---|
-| Preflight (reachability, OCP 4.22, default StorageClass, catalogs, resolved pins, GPU instance type or external GPU nodes (Blackwell, about 96 GB), team users) | `playbooks/00-preflight.yml` | done |
-| Early nodes: GPU MachineSets without waiting ([`roles/gpu_node_prep`](roles/gpu_node_prep/README.md)), pre-pull of the model images ([`roles/model_prepull`](roles/model_prepull/README.md)) | `playbooks/05-early-nodes.yml` | done |
+| Preflight (reachability, OCP 4.22, default StorageClass, catalogs, resolved pins, GPU instance type or external GPU nodes (Blackwell, about 96 GB), decision GPU instance type, team users) | `playbooks/00-preflight.yml` | done |
+| Early nodes: GPU MachineSets of each pool without waiting ([`roles/gpu_node_prep`](roles/gpu_node_prep/README.md)), pre-pull of the model images ([`roles/model_prepull`](roles/model_prepull/README.md)) | `playbooks/05-early-nodes.yml` | done |
 | Operators (OLM, pinned CSV, Manual approval) | `playbooks/10-operators.yml` | done |
 | Team access, only with `team_users` in the vault: Keycloak users, OpenShift Group, cluster role ([`roles/team_access`](roles/team_access/README.md)) | `playbooks/15-identity.yml` | new, see [Team access](#team-access) |
 | Cluster prerequisites: inference Gateway and Route ([`roles/ingress_gateway`](roles/ingress_gateway/README.md)), secret values for ESO ([`roles/secrets_bootstrap`](roles/secrets_bootstrap/README.md)), user workload monitoring ([`roles/user_workload_monitoring`](roles/user_workload_monitoring/README.md)), wait for the GPU nodes ([`roles/gpu_node_prep`](roles/gpu_node_prep/README.md)) | `playbooks/20-prereqs.yml` | done |
@@ -253,6 +253,43 @@ oc get events -n sovereign-selfheal-prepull --sort-by=.lastTimestamp | grep -E '
 oc get events -n local-models --sort-by=.lastTimestamp | grep -E 'Pulling|Pulled'
 # with the pre-pull the model pod shows: Container image "..." already present on machine
 ```
+
+## Decision model (optional)
+
+With `-e decision_model_enabled=true` the demo gets a second local model: DiffusionGemma
+26B-A4B FP8-dynamic, served by the vLLM structured-read mode behind the example decision server.
+It answers typed questions (yes/no, multiple choice, score) with a probability from one forward
+pass. The privacy gate of the router uses it as its C2 classifier; the self-heal agents can use it
+to branch. Qwen3.8, its node and its settings do not change.
+
+> **Support status:** the decision model runs on an **unsupported preview image**
+> (`registry.redhat.io/rhaii-preview/vllm-cuda-rhel9:diffusiongemma-jev`), for prototypes and
+> proofs of concept. The example decision server is planned as Developer Preview in Red Hat AI
+> Inference Server 3.6 GA and as Technology Preview in 3.7 EA1; 3.7 GA is the path to general
+> availability. Its API is not a vLLM API and may change.
+
+This repo adds, only with the flag:
+
+- the `gpu-decision` GPU pool: one `g6e.2xlarge` (NVIDIA L40S, 48 GB) in the first zone, 100 GiB
+  root disk, label `node-role.kubernetes.io/gpu-decision` ([`roles/gpu_node_prep`](roles/gpu_node_prep/README.md));
+- a preflight check of its instance type (`^(g6e|p5|p5e|p5en|p6-b200)\.`), and after the join a check of
+  its GPU memory (at least 40000 MiB);
+- the pre-pull of its two images on that node ([`roles/model_prepull`](roles/model_prepull/README.md));
+- `decisionModel.enabled: true` for the gitops seed, and `localModel.profiles.gpu.nodeSelector`
+  `node-role.kubernetes.io/gpu` so that Qwen stays on its own node.
+
+```bash
+scripts/run-playbook.sh playbooks/site.yml -e decision_model_enabled=true
+```
+
+Measured on 2026-09-30 (ocp.5bw8q, spike with a hand-made MachineSet of the same shape):
+
+| Step | Time |
+|---|---|
+| MachineSet -> node Ready | 3 min 26 s (no `g6e.2xlarge` capacity in us-east-2b; us-east-2a at once) |
+| NVIDIA driver ready (`nvidia.com/gpu` allocatable) | less than 9 min after the node joined |
+| Preview vLLM image (6.2 GB) | about 5 min, restarted once by the CRI-O restart of the NVIDIA toolkit |
+| vLLM start -> ready (weights 207 s from a gp3 volume, engine 30 s) | 5 min 11 s |
 
 ## Observability (traces and metrics of the router)
 

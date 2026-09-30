@@ -1,11 +1,41 @@
 ---
-# Create (or scale) the GPU MachineSets, then wait for the GPU nodes.
+# Create (or scale) the MachineSets of every GPU pool, then wait for the GPU nodes.
 # gpu_node_prep_wait false: create only. playbooks/05-early-nodes.yml uses it so that AWS
-# builds the GPU node while the operators are installed; playbooks/20-prereqs.yml waits.
+# builds the GPU nodes while the operators are installed; playbooks/20-prereqs.yml waits.
 
-- name: Ensure the GPU MachineSets
+- name: Read the cluster and the worker MachineSets
+  ansible.builtin.include_tasks: sources.yml
+
+- name: Ensure the MachineSets of each GPU pool
   ansible.builtin.include_tasks: machinesets.yml
+  loop: "{{ gpu_node_prep_pools }}"
+  loop_control:
+    loop_var: gpu_node_prep_pool
+    label: "{{ gpu_node_prep_pool.name }}"
 
-- name: Wait for the GPU nodes
+- name: Wait for the GPU nodes of each pool
   ansible.builtin.include_tasks: wait.yml
+  loop: "{{ gpu_node_prep_pools }}"
+  loop_control:
+    loop_var: gpu_node_prep_pool
+    label: "{{ gpu_node_prep_pool.name }}"
   when: gpu_node_prep_wait | bool
+
+# After a new node joins, the metrics components (dcgm, dcgm-exporter) need about a minute
+# more than the GPU itself.
+- name: Wait until the NVIDIA ClusterPolicy is ready
+  kubernetes.core.k8s_info:
+    api_version: nvidia.com/v1
+    kind: ClusterPolicy
+    name: "{{ gpu_node_prep_cluster_policy_name }}"
+  register: gpu_node_prep_cluster_policy
+  until:
+    - gpu_node_prep_cluster_policy.resources | length == 1
+    - (gpu_node_prep_cluster_policy.resources | first).status.state | default('') == 'ready'
+  retries: "{{ ((gpu_node_prep_gpu_timeout | int) / (gpu_node_prep_poll_delay | int)) | round(0, 'ceil') | int }}"
+  delay: "{{ gpu_node_prep_poll_delay }}"
+  when:
+    - gpu_node_prep_wait | bool
+    - gpu_node_prep_wait_cluster_policy | bool
+    - not ansible_check_mode
+    - gpu_node_prep_pools | map(attribute='replicas') | map('int') | max > 0

@@ -4,7 +4,8 @@
     msg: >-
       Checking cluster reachability, OpenShift {{ ocp_preflight_required_version }}.x,
       default StorageClass={{ ocp_preflight_require_default_storageclass }},
-      catalogs={{ ocp_preflight_catalog_sources }}, gpu_nodes_required={{ ocp_preflight_gpu_nodes_required }}
+      catalogs={{ ocp_preflight_catalog_sources }}, gpu_nodes_required={{ ocp_preflight_gpu_nodes_required }},
+      decision_model={{ ocp_preflight_decision_enabled }}
 
 - name: Read the ClusterVersion (cluster reachable and authenticated)
   kubernetes.core.k8s_info:
@@ -99,6 +100,29 @@
     - gpu_enabled | default(true) | bool
     - gpu_nodes_managed | default(true) | bool
 
+# Managed decision nodes (the gpu-decision pool of gpu_node_prep).
+- name: Assert the decision GPU instance type fits the decision model
+  ansible.builtin.assert:
+    that:
+      - gpu_node_prep_decision_instance_type | default('g6e.2xlarge') is ansible.builtin.regex(ocp_preflight_decision_instance_type_regex)
+    fail_msg: >-
+      gpu_node_prep_decision_instance_type {{ gpu_node_prep_decision_instance_type | default('g6e.2xlarge') }} does not match
+      {{ ocp_preflight_decision_instance_type_regex }}. The decision model needs a GPU with native FP8 and about
+      40 GB (for example g6e.2xlarge, one NVIDIA L40S).
+    success_msg: "Decision GPU instance type {{ gpu_node_prep_decision_instance_type | default('g6e.2xlarge') }}"
+  when:
+    - gpu_enabled | default(true) | bool
+    - gpu_nodes_managed | default(true) | bool
+    - ocp_preflight_decision_enabled | bool
+
+- name: Assert the decision model is enabled only with the GPU profile
+  ansible.builtin.assert:
+    that:
+      - gpu_enabled | default(true) | bool
+    fail_msg: decision_model_enabled needs gpu_enabled (the decision model runs on its own GPU node).
+    quiet: true
+  when: ocp_preflight_decision_enabled | bool
+
 - name: GPU node check
   when: ocp_preflight_gpu_nodes_required | bool
   block:
@@ -134,3 +158,26 @@
           >= {{ ocp_preflight_gpu_min_memory_mib }} MiB). The local model needs an NVIDIA Blackwell GPU with
           about 96 GB. Add a GPU MachineSet first.
         success_msg: "GPU nodes: {{ ocp_preflight_gpu_nodes | join(', ') }}"
+
+- name: Decision GPU node check (nodes from outside)
+  when:
+    - ocp_preflight_decision_enabled | bool
+    - gpu_enabled | default(true) | bool
+    - not (gpu_nodes_managed | default(true) | bool)
+  block:
+    - name: Read the decision GPU nodes
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Node
+        label_selectors:
+          - "{{ ocp_preflight_decision_node_label }}"
+      register: ocp_preflight_decision_nodes
+
+    - name: Assert a decision GPU node is present
+      ansible.builtin.assert:
+        that:
+          - ocp_preflight_decision_nodes.resources | length >= 1
+        fail_msg: >-
+          decision_model_enabled with gpu_nodes_managed false needs at least one GPU node with the label
+          {{ ocp_preflight_decision_node_label }} (for example an NVIDIA L40S node, not the Qwen node).
+        success_msg: "Decision GPU nodes: {{ ocp_preflight_decision_nodes.resources | map(attribute='metadata.name') | join(', ') }}"

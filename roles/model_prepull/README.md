@@ -21,6 +21,8 @@ GPU node joins ──> prepull-modelcar and prepull-runtime pull in parallel
 | Namespace `sovereign-selfheal-prepull` | Not managed by Argo CD |
 | DaemonSet `prepull-modelcar` | Modelcar image (the model weights) of the selected profile |
 | DaemonSet `prepull-runtime` | vLLM runtime image of the selected profile |
+| DaemonSet `prepull-decision-modelcar` | Only with `decision_model_enabled`: modelcar of the decision model (27.2 GB, one layer) |
+| DaemonSet `prepull-decision-runtime` | Only with `decision_model_enabled`: preview vLLM image of the decision model (6.2 GB) |
 
 One DaemonSet per image, so the two pulls run **in parallel** (the containers of one pod
 start one after the other, and each start waits for its image). The node bandwidth is shared,
@@ -45,6 +47,11 @@ Where the pods run:
 | `gpu` | `node-role.kubernetes.io/gpu` (set by `roles/gpu_node_prep` when the node is created) | `nvidia.com/gpu` |
 | `gpu`, `gpu_nodes_managed: false` | `nvidia.com/gpu.present=true` | `nvidia.com/gpu` |
 | `cpu` | `node-role.kubernetes.io/worker` | none |
+| decision model | `node-role.kubernetes.io/gpu-decision` (the `gpu-decision` pool of `roles/gpu_node_prep`) | `nvidia.com/gpu` |
+
+The Qwen images are not pulled on the decision node, and the decision images are not pulled on
+the Qwen node. Exception: with `gpu_nodes_managed: false` the `gpu` DaemonSets select
+`nvidia.com/gpu.present=true`, which matches every GPU node, the decision node too.
 
 The DaemonSets are created before the GPU node exists: they have 0 pods until the node joins,
 and the pull starts at that moment.
@@ -65,6 +72,9 @@ and the pull starts at that moment.
 | `model_prepull_namespace` | `sovereign-selfheal-prepull` | Namespace of the DaemonSets |
 | `model_prepull_profile` | `gpu` when `gpu_enabled`, else `cpu` | Same rule as the seed |
 | `model_prepull_images` | current digests of both profiles | `{modelcar, runtime}` per profile, without `oci://` |
+| `model_prepull_decision_enabled` | `decision_model_enabled` and the `gpu` profile | Add the decision DaemonSets |
+| `model_prepull_decision_images` | current digests | `{modelcar, runtime}` of the decision model, without `oci://` |
+| `model_prepull_decision_node_selector` | `node-role.kubernetes.io/gpu-decision: ""` | Nodes of the decision DaemonSets |
 | `model_prepull_commands` | `sleep infinity` | Command of each pre-pull container |
 | `model_prepull_node_selectors` / `_tolerations` | see the table above | Per profile |
 | `model_prepull_resources` | requests 10m / 32Mi, limit 64Mi | Per container |
@@ -73,7 +83,8 @@ and the pull starts at that moment.
 **Keep the images in sync with the gitops repo.** `model_prepull_images.<profile>` must match
 `localModel.profiles.<profile>.storageUri` (without `oci://`) and `.runtimeImage` in
 `gitops/bootstrap/values.yaml`. When they differ, the pre-pull downloads images nobody uses;
-`verify.yml` prints a `WARNING` after the seed.
+`verify.yml` prints a `WARNING` after the seed. The same holds for `model_prepull_decision_images`
+and `decisionModel.storageUri` / `.runtimeImage`.
 
 ## Usage
 

@@ -19,6 +19,13 @@ ocp_preflight_gpu_instance_type_regex: '^(g7e|p6-b200)\.'
 ocp_preflight_gpu_product_regex: 'Blackwell|B200'
 ocp_preflight_gpu_min_memory_mib: 90000       # label nvidia.com/gpu.memory; RTX PRO 6000: 97887
 ocp_preflight_gpu_min_nodes: 1
+# Decision model (decision_model_enabled): DiffusionGemma FP8-dynamic needs native FP8 and about
+# 40 GB of GPU memory, on its own node (label node-role.kubernetes.io/gpu-decision). Managed
+# nodes: the instance type of the decision pool must match the regex (L40S, H100, H200, B200).
+# Nodes from outside: at least one node must have the decision label.
+ocp_preflight_decision_enabled: "{{ decision_model_enabled | default(false) }}"
+ocp_preflight_decision_instance_type_regex: '^(g6e|p5|p5e|p5en|p6-b200)\.'
+ocp_preflight_decision_node_label: node-role.kubernetes.io/gpu-decision
 # Catalog sources the enabled operators come from must be READY.
 ocp_preflight_catalog_sources: >-
   {{ operators | default([]) | selectattr('enabled', 'defined') | selectattr('enabled')
