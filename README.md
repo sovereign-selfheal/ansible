@@ -270,8 +270,8 @@ to branch. Qwen3.8, its node and its settings do not change.
 
 This repo adds, only with the flag:
 
-- the `gpu-decision` GPU pool: one `g6e.2xlarge` (NVIDIA L40S, 48 GB) in the first zone, 100 GiB
-  root disk, label `node-role.kubernetes.io/gpu-decision` ([`roles/gpu_node_prep`](roles/gpu_node_prep/README.md));
+- the `gpu-decision` GPU pool: one `g6e.2xlarge` (NVIDIA L40S, 48 GB) in the first zone, 200 GiB
+  root disk (100 GiB was not enough for the pull of the 27 GB modelcar layer), label `node-role.kubernetes.io/gpu-decision` ([`roles/gpu_node_prep`](roles/gpu_node_prep/README.md));
 - a preflight check of its instance type (`^(g6e|p5|p5e|p5en|p6-b200)\.`), and after the join a check of
   its GPU memory (at least 40000 MiB);
 - the pre-pull of its two images on that node ([`roles/model_prepull`](roles/model_prepull/README.md));

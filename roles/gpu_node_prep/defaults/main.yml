@@ -46,9 +46,10 @@ gpu_node_prep_decision_instance_type: g6e.2xlarge   # 1x NVIDIA L40S 48 GB, 8 vC
 gpu_node_prep_decision_zones: []                    # empty: every worker zone, sorted by name
 gpu_node_prep_decision_active_zone_count: 1
 gpu_node_prep_decision_replicas: 1                  # 0 scales the decision MachineSets down
-# The preview vLLM image (14.2 GB unpacked) and the modelcar (27.2 GB) must fit, and the kubelet
-# deletes unused images at 85% of the disk.
-gpu_node_prep_decision_volume_size: 100             # GiB
+# The preview vLLM image (14.2 GB unpacked) and the modelcar must fit. The modelcar is one gzip layer
+# of 27.1 GB: during the pull CRI-O keeps the blob and the unpacked files, about 55 GB. With 100 GiB
+# the kubelet evicted the pre-pull pod at 96 of 107 GB (2026-09-30), so the same size as the gpu pool.
+gpu_node_prep_decision_volume_size: 200             # GiB
 gpu_node_prep_decision_node_labels:
   node-role.kubernetes.io/gpu-decision: ""
 gpu_node_prep_decision_min_gpu_memory_mib: 40000    # L40S: 46068 MiB

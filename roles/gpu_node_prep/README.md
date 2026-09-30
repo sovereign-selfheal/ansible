@@ -61,7 +61,7 @@ works on a new cluster in a different region without changes.
 | `gpu_node_prep_decision_zones` | `[]` | Zones of the decision pool; empty means every worker zone |
 | `gpu_node_prep_decision_active_zone_count` | `1` | Zones of the decision pool that get machines |
 | `gpu_node_prep_decision_replicas` | `1` | Machines per active zone; `0` scales the decision MachineSets down |
-| `gpu_node_prep_decision_volume_size` | `100` | Root disk of the decision nodes in GiB (gp3 baseline) |
+| `gpu_node_prep_decision_volume_size` | `200` | Root disk of the decision nodes in GiB (gp3 baseline). 100 GiB is not enough: the pull of the 27 GB modelcar layer needs about 55 GB |
 | `gpu_node_prep_decision_node_labels` | `node-role.kubernetes.io/gpu-decision: ""` | Labels of the decision nodes |
 | `gpu_node_prep_decision_min_gpu_memory_mib` | `40000` | Minimum GPU memory of the decision pool (L40S: 46068) |
 | `gpu_node_prep_pools` | built from the variables above | The pools; override only to add a pool of your own |
