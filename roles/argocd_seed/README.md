@@ -8,21 +8,24 @@ in `AGENTS.md` §7.
 
 1. Decides the routing mode: **hybrid** when `sota_api_base`, `sota_model` and `sota_api_key` are all set,
    **local-only** when none of them is set. Only some of them set stops the play.
-2. Creates the namespaces `local-models`, `maas-routing` and `observability` with the label
+2. Creates the namespaces `local-models`, `maas-routing`, `agentic-triage` and `observability` with the label
    `argocd.argoproj.io/managed-by: openshift-gitops`. The default instance cannot create namespaces;
    with this label the GitOps operator gives it admin rights there.
-3. Sets custom health checks on the ArgoCD CR: `Application` (so that the sync waves of the app
+3. Creates cluster-level RBAC prerequisites for gitops components (for example
+   `ClusterRoleBinding/prometheus-mcp-server-sa-cluster-monitoring-view`).
+4. Sets custom health checks on the ArgoCD CR: `Application` (so that the sync waves of the app
    of apps wait for each component), `AuthPolicy` and `TokenRateLimitPolicy` (Healthy when
-   `Enforced`), `TempoMonolithic` (Healthy when `Ready`). Argo CD 3.4 already knows
+   `Enforced`), `TempoMonolithic` (Healthy when `Ready`) and `MCPServer` (Healthy when `Ready`).
+   Argo CD 3.4 already knows
    `OpenTelemetryCollector`. This replaces `spec.resourceHealthChecks` of the instance.
-4. Creates the root Application with these values: `appsDomain` (from the cluster), `modelProfile`
+5. Creates the root Application with these values: `appsDomain` (from the cluster), `modelProfile`
    (`gpu` when `gpu_enabled`, else `cpu`), `sota.*` (with `sota.enabled` = hybrid mode),
    `secretStore.enabled`, `classifier.mode`, `observability.enabled`, `decisionModel.enabled`,
    `namespaces.observability`, `repo.*`, plus `argocd_seed_extra_values`. With the decision model
    and nodes from `roles/gpu_node_prep` it also sets
    `localModel.profiles.gpu.nodeSelector` to `node-role.kubernetes.io/gpu`, so that Qwen does not
    start on the decision node.
-5. Waits until the root Application is `Synced` and `Healthy` (so every component is), then
+6. Waits until the root Application is `Synced` and `Healthy` (so every component is), then
    prints the state of every Application.
 
 ## Variables (`defaults/main.yml`)
@@ -42,8 +45,10 @@ in `AGENTS.md` §7.
 | `argocd_seed_decision_model_enabled` | `decision_model_enabled` (`false`) | Value `decisionModel.enabled`: the decision model of the gitops repo |
 | `argocd_seed_local_model_node_selector` | `node-role.kubernetes.io/gpu` with the decision model and managed GPU nodes, else `{}` | Added to the nodeSelector of the local model; `{}` sends nothing |
 | `argocd_seed_extra_values` | `{}` | Other values of `bootstrap/values.yaml` |
-| `argocd_seed_namespaces` | `local-models`, `maas-routing`, `observability` | Namespaces and labels |
-| `argocd_seed_health_checks` | Application, AuthPolicy, TokenRateLimitPolicy, TempoMonolithic | Lua files in `files/` |
+| `argocd_seed_namespaces` | `local-models`, `maas-routing`, `agentic-triage`, `observability` | Namespaces and labels |
+| `argocd_seed_cluster_role_bindings` | `prometheus-mcp-server-sa-cluster-monitoring-view` | ClusterRoleBindings required by gitops components |
+| `argocd_seed_mcpserver_api_group` | `mcp.opendatahub.io` | API group used by the MCPServer Argo CD health check |
+| `argocd_seed_health_checks` | Application, AuthPolicy, TokenRateLimitPolicy, TempoMonolithic, MCPServer | Lua files in `files/` |
 | `argocd_seed_admin_groups` | `[selfheal-team]` when `team_users` is set, else `[]` | OpenShift Groups made admin in the Argo CD UI: one `g, <group>, role:admin` line each, appended to `spec.rbac.policy` (existing lines are kept) |
 | `argocd_seed_wait` / `_timeout` | `true` / `3600` (gpu), `1800` (cpu) | Wait for Synced and Healthy. The first start of the local model (Qwen3.8) on a new GPU node takes about 27 min |
 

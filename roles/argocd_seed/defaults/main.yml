@@ -22,11 +22,21 @@ argocd_seed_namespaces:
   - name: maas-routing
     labels:
       argocd.argoproj.io/managed-by: "{{ argocd_seed_namespace }}"
+  - name: agentic-triage
+    labels:
+      argocd.argoproj.io/managed-by: "{{ argocd_seed_namespace }}"
   # Tempo and the OpenTelemetry collector (gitops component observability). Created also when
   # observability_enabled is false: an empty namespace costs nothing and keeps the contract simple.
   - name: "{{ argocd_seed_observability_namespace }}"
     labels:
       argocd.argoproj.io/managed-by: "{{ argocd_seed_namespace }}"
+
+# Cluster-level RBAC prerequisites for gitops components.
+argocd_seed_cluster_role_bindings:
+  - name: prometheus-mcp-server-sa-cluster-monitoring-view
+    namespace: agentic-triage
+    service_account: prometheus-mcp-server-sa
+    cluster_role: cluster-monitoring-view
 
 # Values of the root Application (bootstrap/values.yaml in the gitops repo).
 argocd_seed_model_profile: "{{ 'gpu' if (gpu_enabled | default(true) | bool) else 'cpu' }}"
@@ -60,6 +70,7 @@ argocd_seed_extra_values: {}
 
 # Custom health checks on the ArgoCD CR (Argo CD already knows InferenceService,
 # ExternalSecret and OpenTelemetryCollector). They replace spec.resourceHealthChecks of the instance.
+argocd_seed_mcpserver_api_group: mcp.opendatahub.io
 argocd_seed_health_checks:
   - group: argoproj.io
     kind: Application
@@ -74,6 +85,10 @@ argocd_seed_health_checks:
   - group: tempo.grafana.com
     kind: TempoMonolithic
     file: health-tempo.lua
+  # RHOAI MCP Lifecycle: Healthy when the MCPServer reports Ready.
+  - group: "{{ argocd_seed_mcpserver_api_group }}"
+    kind: MCPServer
+    file: health-mcpserver.lua
 
 # OpenShift Groups that are admin in the Argo CD UI (Dex passes the OpenShift groups to Argo CD).
 # One line `g, <group>, role:admin` per group is added to spec.rbac.policy; the lines already

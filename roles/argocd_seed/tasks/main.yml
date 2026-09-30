@@ -92,6 +92,27 @@
     loop_var: argocd_seed_ns
     label: "{{ argocd_seed_ns.name }}"
 
+- name: Ensure the cluster role bindings for gitops components
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: ClusterRoleBinding
+      metadata:
+        name: "{{ argocd_seed_crb.name }}"
+      roleRef:
+        apiGroup: rbac.authorization.k8s.io
+        kind: ClusterRole
+        name: "{{ argocd_seed_crb.cluster_role }}"
+      subjects:
+        - kind: ServiceAccount
+          name: "{{ argocd_seed_crb.service_account }}"
+          namespace: "{{ argocd_seed_crb.namespace }}"
+  loop: "{{ argocd_seed_cluster_role_bindings }}"
+  loop_control:
+    loop_var: argocd_seed_crb
+    label: "{{ argocd_seed_crb.name }}"
+
 - name: Ensure the custom health checks of Argo CD
   kubernetes.core.k8s:
     state: patched

@@ -248,19 +248,20 @@ The same contract is in `gitops/AGENTS.md` §2. Keep both in sync.
   Authorino (`kuadrant-system`), the `TelemetryPolicy` `openshift-ai-inference-labels` (a Kuadrant policy,
   but it must sit next to the Gateway: label `tier` on the Limitador counters, from the `tier` filter of
   the gitops AuthPolicy),
-  GPU nodes, the namespaces `local-models` and `maas-routing`, the External Secrets Operator, the
+  GPU nodes, the namespaces `local-models`, `maas-routing` and `agentic-triage`, the External Secrets Operator, the
   `ClusterSecretStore` and its source Secrets (namespace `sovereign-selfheal-secrets`), the model image
   pre-pull DaemonSets (namespace `sovereign-selfheal-prepull`), the Argo CD settings, the root Application,
   the observability operators (OpenTelemetry, Tempo, Cluster Observability), the `UIPlugin`s
   `distributed-tracing` and `monitoring` (Perses), the Tempo tenant write permission (ClusterRole + ClusterRoleBinding
-  `tempo-traces-write-<tenant>`), the console menu links to the router traces (`ConsoleLink`
+  `tempo-traces-write-<tenant>`), the ClusterRoleBinding `prometheus-mcp-server-sa-cluster-monitoring-view`,
+  the console menu links to the router traces (`ConsoleLink`
   `sovereign-traces-*`), the namespace `observability`, user workload monitoring
   (`enableUserWorkload` in `cluster-monitoring-config`; retention and volume of the user workload
   Prometheus in `user-workload-monitoring-config`), team access when `team_users` is set (Keycloak
   in the namespace `keycloak` when this repo installs it: PostgreSQL, `Keycloak` CR, Route; realm, client,
   users; the OAuth IdP; `Group/selfheal-team` and its ClusterRoleBinding; the Argo CD RBAC line of that Group).
   `gitops`: every object inside `local-models`, `maas-routing` and `observability`.
-- **Namespaces** `local-models`, `maas-routing` and `observability` carry `argocd.argoproj.io/managed-by: openshift-gitops`
+- **Namespaces** `local-models`, `maas-routing`, `agentic-triage` and `observability` carry `argocd.argoproj.io/managed-by: openshift-gitops`
   (the default Argo CD instance manages only labelled namespaces), and `local-models` also
   `opendatahub.io/dashboard: "true"` and `modelmesh-enabled: "false"`.
 - **Root Application** (`30-gitops-seed.yml`): path `bootstrap` of the gitops repo, with `helm.valuesObject`:
@@ -287,7 +288,7 @@ The same contract is in `gitops/AGENTS.md` §2. Keep both in sync.
   **local-only mode** (`sota.enabled: false`, every request goes to the local model); some = error.
 - **Argo CD health checks** on the ArgoCD CR: `argoproj.io/Application` (sync waves between components),
   `serving.kserve.io/InferenceService`, Kuadrant `AuthPolicy` and `TokenRateLimitPolicy`, Tempo
-  `TempoMonolithic` (Argo CD 3.4 already knows `OpenTelemetryCollector`).
+  `TempoMonolithic` and MCP lifecycle `MCPServer` (Argo CD 3.4 already knows `OpenTelemetryCollector`).
 - **Secrets** are managed by the External Secrets Operator. `roles/secrets_bootstrap` lands the values from
   `vault.yml` (or AgnosticV) in Secrets of the namespace `sovereign-selfheal-secrets` and creates the
   `ClusterSecretStore` `sovereign-selfheal` (provider `kubernetes`) that ESO reads. A different backend later

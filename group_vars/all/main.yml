@@ -100,7 +100,7 @@ rhoai_dsc_components:
   feastoperator: {managementState: Removed}
   kueue: {managementState: Removed}
   llamastackoperator: {managementState: Removed}
-  mcplifecycleoperator: {managementState: Removed}
+  mcplifecycleoperator: {managementState: Managed}
   mlflowoperator: {managementState: Removed}
   modelregistry: {managementState: Removed, registriesNamespace: rhoai-model-registries}
   ogx: {managementState: Removed}
