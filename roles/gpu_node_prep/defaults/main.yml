@@ -1,7 +1,11 @@
 ---
-# gpu_node_prep: one GPU MachineSet per availability zone, cloned from the worker
-# MachineSet of that zone (AWS only). Only the first `gpu_node_prep_active_zone_count`
-# zones get `gpu_node_prep_replicas` machines; the others are created with 0 replicas.
+# gpu_node_prep: GPU pools on AWS. Each pool has one MachineSet per availability zone, cloned
+# from the worker MachineSet of that zone. Only the first `active_zone_count` zones of a pool
+# get `replicas` machines; the others are created with 0 replicas.
+#
+# Pool `gpu` (always): the local model (Qwen3.8), from the gpu_node_prep_* variables below.
+# Pool `gpu-decision` (only with decision_model_enabled): the decision model (DiffusionGemma),
+# from the gpu_node_prep_decision_* variables.
 
 gpu_node_prep_instance_type: g7e.2xlarge        # 1x NVIDIA RTX PRO 6000 Blackwell 96 GB
 # Zones to cover. Empty: every zone that has a worker MachineSet, sorted by name.
@@ -28,6 +32,58 @@ gpu_node_prep_taints:
   - key: nvidia.com/gpu
     value: "true"
     effect: NoSchedule
+# After the node joins: the GPU memory (GFD label nvidia.com/gpu.memory) must be at least this.
+# Qwen3.8 NVFP4 needs a Blackwell GPU with about 96 GB (RTX PRO 6000: 97887 MiB).
+gpu_node_prep_min_gpu_memory_mib: 90000
+
+# Pool of the decision model (DiffusionGemma 26B-A4B FP8-dynamic with the vLLM structured-read
+# mode). One NVIDIA L40S (48 GB, Ada, native FP8). g6e.2xlarge, not g6e.xlarge: after the load
+# the vLLM container uses 31 GiB of host memory, and a g6e.xlarge has 32 GiB in total
+# (spike on 2026-09-30). The node label keeps Qwen and the decision model apart; the taint is
+# the same as the gpu pool.
+gpu_node_prep_decision_enabled: "{{ decision_model_enabled | default(false) }}"
+gpu_node_prep_decision_instance_type: g6e.2xlarge   # 1x NVIDIA L40S 48 GB, 8 vCPU, 64 GiB
+gpu_node_prep_decision_zones: []                    # empty: every worker zone, sorted by name
+gpu_node_prep_decision_active_zone_count: 1
+gpu_node_prep_decision_replicas: 1                  # 0 scales the decision MachineSets down
+# The preview vLLM image (14.2 GB unpacked) and the modelcar must fit. The modelcar is one gzip layer
+# of 27.1 GB: during the pull CRI-O keeps the blob and the unpacked files, about 55 GB. With 100 GiB
+# the kubelet evicted the pre-pull pod at 96 of 107 GB (2026-09-30), so the same size as the gpu pool.
+gpu_node_prep_decision_volume_size: 200             # GiB
+gpu_node_prep_decision_node_labels:
+  node-role.kubernetes.io/gpu-decision: ""
+gpu_node_prep_decision_min_gpu_memory_mib: 40000    # L40S: 46068 MiB
+
+# The pools. Each pool: name (MachineSet <infra-id>-<name>-<zone>, Machine label
+# cluster-api-machine-type <name>), instance_type, zones, active_zone_count, replicas,
+# volume_size, volume_type, volume_iops, volume_throughput, node_labels (the first key selects
+# the nodes of the pool), taints, min_gpu_memory_mib.
+gpu_node_prep_pools: >-
+  {{ [{'name': 'gpu',
+       'instance_type': gpu_node_prep_instance_type,
+       'zones': gpu_node_prep_zones,
+       'active_zone_count': gpu_node_prep_active_zone_count,
+       'replicas': gpu_node_prep_replicas,
+       'volume_size': gpu_node_prep_volume_size,
+       'volume_type': gpu_node_prep_volume_type,
+       'volume_iops': gpu_node_prep_volume_iops,
+       'volume_throughput': gpu_node_prep_volume_throughput,
+       'node_labels': gpu_node_prep_node_labels,
+       'taints': gpu_node_prep_taints,
+       'min_gpu_memory_mib': gpu_node_prep_min_gpu_memory_mib}]
+     + ([{'name': 'gpu-decision',
+          'instance_type': gpu_node_prep_decision_instance_type,
+          'zones': gpu_node_prep_decision_zones,
+          'active_zone_count': gpu_node_prep_decision_active_zone_count,
+          'replicas': gpu_node_prep_decision_replicas,
+          'volume_size': gpu_node_prep_decision_volume_size,
+          'volume_type': gpu_node_prep_volume_type,
+          'volume_iops': '',
+          'volume_throughput': '',
+          'node_labels': gpu_node_prep_decision_node_labels,
+          'taints': gpu_node_prep_taints,
+          'min_gpu_memory_mib': gpu_node_prep_decision_min_gpu_memory_mib}]
+        if gpu_node_prep_decision_enabled | bool else []) }}
 
 # false: only create or scale the MachineSets (playbooks/05-early-nodes.yml); the waits
 # below run later in playbooks/20-prereqs.yml.

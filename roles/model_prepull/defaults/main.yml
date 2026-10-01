@@ -48,6 +48,37 @@ model_prepull_tolerations:
       effect: NoSchedule
   cpu: []
 
+# Decision model (decision_model_enabled): its images on the nodes of the gpu-decision pool of
+# roles/gpu_node_prep, in DaemonSets prepull-decision-<key>. They must match decisionModel in
+# gitops/bootstrap/values.yaml. The Qwen images are not pulled there, and these not on Qwen's node.
+model_prepull_decision_enabled: "{{ (decision_model_enabled | default(false) | bool) and model_prepull_profile == 'gpu' }}"
+model_prepull_decision_images:
+  # diffusiongemma-26b-a4b-fp8-3b3dae4 (modelcar repo), resolved on quay.io on 2026-09-30
+  modelcar: quay.io/sovereign-selfheal/modelcar-diffusiongemma-26b-a4b-fp8@sha256:b10821319f60a03ec78e6aacf57bedca83e540fd8b0cbcbf3ffc644215e81fc6
+  # rhaii-preview/vllm-cuda-rhel9:diffusiongemma-jev (linux/amd64), resolved on registry.redhat.io
+  # on 2026-09-30. Unsupported preview image (vLLM 0.29.1.dev1248).
+  runtime: registry.redhat.io/rhaii-preview/vllm-cuda-rhel9@sha256:24fccf947aa33857611efed0d57aead4efc525c78a882760db5229b702713a1a
+model_prepull_decision_node_selector:
+  node-role.kubernetes.io/gpu-decision: ""
+
+# Every pre-pull DaemonSet: prepull-<component>. The components of the selected profile keep
+# their names (modelcar, runtime); the decision model adds decision-modelcar and decision-runtime.
+model_prepull_entries: >-
+  {%- set acc = namespace(list=[]) -%}
+  {%- for key, image in model_prepull_images[model_prepull_profile] | dictsort -%}
+  {%- set acc.list = acc.list + [{'component': key, 'kind': key, 'image': image,
+                                  'node_selector': model_prepull_node_selectors[model_prepull_profile],
+                                  'tolerations': model_prepull_tolerations[model_prepull_profile]}] -%}
+  {%- endfor -%}
+  {%- if model_prepull_decision_enabled | bool -%}
+  {%- for key, image in model_prepull_decision_images | dictsort -%}
+  {%- set acc.list = acc.list + [{'component': 'decision-' ~ key, 'kind': key, 'image': image,
+                                  'node_selector': model_prepull_decision_node_selector,
+                                  'tolerations': model_prepull_tolerations['gpu']}] -%}
+  {%- endfor -%}
+  {%- endif -%}
+  {{ acc.list }}
+
 model_prepull_resources:
   requests:
     cpu: 10m

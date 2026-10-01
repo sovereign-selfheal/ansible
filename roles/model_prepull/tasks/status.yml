@@ -24,7 +24,7 @@
   vars:
     model_prepull_lines: >-
       {%- set acc = namespace(lines=[]) -%}
-      {%- for key in model_prepull_images[model_prepull_profile].keys() | sort -%}
+      {%- for key in model_prepull_entries | map(attribute='component') | sort -%}
       {%- set ds = model_prepull_ds.resources | selectattr('metadata.name', 'equalto', 'prepull-' ~ key) | list -%}
       {%- if ds | length == 0 -%}
       {%- set acc.lines = acc.lines + [key ~ ': no DaemonSet (model_prepull did not run)'] -%}
@@ -33,7 +33,7 @@
       {%- set desired = st.desiredNumberScheduled | default(0) | int -%}
       {%- set ready = st.numberReady | default(0) | int -%}
       {%- if desired == 0 -%}
-      {%- set acc.lines = acc.lines + [key ~ ': no node yet (the GPU node has not joined the cluster)'] -%}
+      {%- set acc.lines = acc.lines + [key ~ ': no node yet (the node of the pool has not joined the cluster)'] -%}
       {%- elif ready == desired -%}
       {%- set acc.lines = acc.lines + [key ~ ': image present on ' ~ ready ~ '/' ~ desired ~ ' node(s)'] -%}
       {%- else -%}

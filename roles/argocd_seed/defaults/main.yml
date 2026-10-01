@@ -43,6 +43,18 @@ argocd_seed_classifier_mode: "{{ classifier_mode | default('local') }}"
 # OpenTelemetry and Tempo operators are installed (observability_enabled).
 argocd_seed_observability_enabled: "{{ observability_enabled | default(true) }}"
 argocd_seed_observability_namespace: "{{ observability_namespace | default('observability') }}"
+# Decision model (gitops component decision-model, value decisionModel.enabled). Always sent,
+# so that turning it off also reaches the root Application.
+argocd_seed_decision_model_enabled: "{{ decision_model_enabled | default(false) }}"
+# With the decision model there are two GPU pools, and nvidia.com/gpu.present (the default
+# nodeSelector of the local model) matches both. With nodes from gpu_node_prep the local model
+# then selects the node label of its own pool. Sent only with the decision model, so that
+# the Qwen pod of an existing cluster is not recreated by a new seed.
+argocd_seed_local_model_node_selector: >-
+  {{ {'node-role.kubernetes.io/gpu': ''}
+     if (argocd_seed_decision_model_enabled | bool and (gpu_nodes_managed | default(true) | bool)
+         and argocd_seed_model_profile == 'gpu')
+     else {} }}
 # Any other value of bootstrap/values.yaml, merged last (for example {tiers: [...]}).
 argocd_seed_extra_values: {}
 

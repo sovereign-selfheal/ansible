@@ -1,0 +1,57 @@
+---
+# Read once for all pools: the infrastructure ID and one worker MachineSet per zone, the
+# source of every GPU MachineSet (same AMI, subnet, security groups and tags).
+
+- name: Reconcile GPU MachineSets
+  ansible.builtin.debug:
+    msg: >-
+      Reconciling GPU pools:
+      {% for p in gpu_node_prep_pools %}{{ p.name }} (instance_type={{ p.instance_type }}
+      zones={{ p.zones | default([], true) or 'all worker zones' }} active_zones={{ p.active_zone_count }}
+      replicas_per_active_zone={{ p.replicas }}){{ '; ' if not loop.last else '' }}{% endfor %}
+      check_mode={{ ansible_check_mode }}
+
+- name: Read the cluster Infrastructure
+  kubernetes.core.k8s_info:
+    api_version: config.openshift.io/v1
+    kind: Infrastructure
+    name: cluster
+  register: gpu_node_prep_infra
+
+- name: Assert the platform is AWS
+  ansible.builtin.assert:
+    that:
+      - (gpu_node_prep_infra.resources | first).status.platformStatus.type == 'AWS'
+    fail_msg: >-
+      gpu_node_prep supports only AWS (platform is
+      {{ (gpu_node_prep_infra.resources | first).status.platformStatus.type }}).
+    quiet: true
+
+- name: List the MachineSets
+  kubernetes.core.k8s_info:
+    api_version: machine.openshift.io/v1beta1
+    kind: MachineSet
+    namespace: "{{ gpu_node_prep_machine_api_namespace }}"
+  register: gpu_node_prep_machinesets
+
+- name: Pick one worker MachineSet per zone as the source
+  vars:
+    gpu_node_prep_workers: >-
+      {{ gpu_node_prep_machinesets.resources
+         | selectattr('spec.template.metadata.labels', 'defined')
+         | selectattr('spec.template.metadata.labels', 'contains', 'machine.openshift.io/cluster-api-machine-type')
+         | list }}
+  ansible.builtin.set_fact:
+    gpu_node_prep_infra_id: "{{ (gpu_node_prep_infra.resources | first).status.infrastructureName }}"
+    gpu_node_prep_sources: >-
+      {%- set acc = namespace(by_zone={}) -%}
+      {%- for ms in gpu_node_prep_workers | sort(attribute='metadata.name') -%}
+      {%- set labels = ms.spec.template.metadata.labels -%}
+      {%- set zone = ms.spec.template.spec.providerSpec.value.placement.availabilityZone -%}
+      {%- if labels['machine.openshift.io/cluster-api-machine-role'] | default('') == 'worker'
+            and labels['machine.openshift.io/cluster-api-machine-type'] | default('') == 'worker'
+            and zone not in acc.by_zone -%}
+      {%- set acc.by_zone = acc.by_zone | combine({zone: ms}) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ acc.by_zone }}

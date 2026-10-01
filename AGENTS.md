@@ -268,7 +268,13 @@ The same contract is in `gitops/AGENTS.md` §2. Keep both in sync.
   `sota.enabled`, `sota.apiBase`, `sota.model`, `sota.servedMatch`, `sota.reasoning` (`sota_reasoning`, default
   `false`: no reasoning), `secretStore.enabled`, `classifier.mode`
   (`classifier_mode`: `local` = the local model classifies, default; `external`; `off`),
-  `observability.enabled` (`observability_enabled`, default `true`), `namespaces.observability`.
+  `observability.enabled` (`observability_enabled`, default `true`), `namespaces.observability`,
+  `decisionModel.enabled` (`decision_model_enabled`, default `false`), and, only with the decision model
+  and managed GPU nodes, `localModel.profiles.gpu.nodeSelector` (`node-role.kubernetes.io/gpu: ""`).
+- **Decision model** (`decision_model_enabled`): this repo creates the `gpu-decision` GPU pool
+  (`roles/gpu_node_prep`, node label `node-role.kubernetes.io/gpu-decision`) and the pre-pull of its images
+  (`model_prepull_decision_images`, same digests as `decisionModel` in `gitops/bootstrap/values.yaml`).
+  `gitops` deploys the InferenceService on that node.
 - **Observability**: `gitops` deploys the Tempo instance `tempo` (kind `TempoMonolithic`, multi-tenancy
   `openshift`, tenant `router`) and the OpenTelemetry collector `otel` (kind `OpenTelemetryCollector`; the
   operator names its Service and ServiceAccount `otel-collector`) in the namespace `observability`. OTLP
