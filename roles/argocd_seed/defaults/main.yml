@@ -70,7 +70,8 @@ argocd_seed_extra_values: {}
 
 # Custom health checks on the ArgoCD CR (Argo CD already knows InferenceService,
 # ExternalSecret and OpenTelemetryCollector). They replace spec.resourceHealthChecks of the instance.
-argocd_seed_mcpserver_api_group: mcp.opendatahub.io
+# Must match gitops MCPServer CRs (mcp.x-k8s.io/v1alpha1); see gitops/components/*/templates/mcpserver.yaml
+argocd_seed_mcpserver_api_group: mcp.x-k8s.io
 argocd_seed_health_checks:
   - group: argoproj.io
     kind: Application

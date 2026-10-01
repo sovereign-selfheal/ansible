@@ -47,7 +47,7 @@ in `AGENTS.md` §7.
 | `argocd_seed_extra_values` | `{}` | Other values of `bootstrap/values.yaml` |
 | `argocd_seed_namespaces` | `local-models`, `maas-routing`, `agentic-triage`, `observability` | Namespaces and labels |
 | `argocd_seed_cluster_role_bindings` | `prometheus-mcp-server-sa-cluster-monitoring-view` | ClusterRoleBindings required by gitops components |
-| `argocd_seed_mcpserver_api_group` | `mcp.opendatahub.io` | API group used by the MCPServer Argo CD health check |
+| `argocd_seed_mcpserver_api_group` | `mcp.x-k8s.io` | API group used by the MCPServer Argo CD health check (MCP Lifecycle Operator CRDs) |
 | `argocd_seed_health_checks` | Application, AuthPolicy, TokenRateLimitPolicy, TempoMonolithic, MCPServer | Lua files in `files/` |
 | `argocd_seed_admin_groups` | `[selfheal-team]` when `team_users` is set, else `[]` | OpenShift Groups made admin in the Argo CD UI: one `g, <group>, role:admin` line each, appended to `spec.rbac.policy` (existing lines are kept) |
 | `argocd_seed_wait` / `_timeout` | `true` / `3600` (gpu), `1800` (cpu) | Wait for Synced and Healthy. The first start of the local model (Qwen3.8) on a new GPU node takes about 27 min |
