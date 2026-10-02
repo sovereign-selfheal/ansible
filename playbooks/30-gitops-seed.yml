@@ -4,6 +4,9 @@
 # Before the seed: report the model pre-pull (no wait). After: check that every gateway pod
 # loaded the Kuadrant wasm module (recreate the pods that did not), check that the model uses
 # the pre-pulled images, and add the console menu links to the router traces.
+# The checks after the seed run also when the seed wait fails (block/always): one Application
+# that never gets Healthy must not leave a broken gateway pod in place (seen on 2026-10-02).
+# The play still fails at the end when the seed failed.
 - name: GitOps seed
   hosts: localhost
   gather_facts: false
@@ -17,38 +20,46 @@
       when: model_prepull_enabled | bool
       tags: always
 
-    - name: Seed the gitops repo
-      ansible.builtin.include_role:
-        name: argocd_seed
-        apply:
-          tags: [argocd_seed]
-      tags: always
+    # No tags on the block: block tags are inherited by the tasks of the included roles, so
+    # `tags: always` here would run the whole seed with --tags ingress_gateway.
+    - name: Seed and check the result
+      block:
+        - name: Seed the gitops repo
+          ansible.builtin.include_role:
+            name: argocd_seed
+            apply:
+              tags: [argocd_seed]
+          tags: always
 
-    - name: Check that every gateway pod loaded the Kuadrant wasm module
-      ansible.builtin.include_role:
-        name: ingress_gateway
-        tasks_from: verify
-        apply:
-          tags: [ingress_gateway]
-      # Only after a seed that waited for the workloads: the wasm filter comes with them.
-      when:
-        - argocd_seed_wait | default(true) | bool
-        - not ansible_check_mode
-      tags: always
+      always:
+        - name: Check that every gateway pod loaded the Kuadrant wasm module
+          ansible.builtin.include_role:
+            name: ingress_gateway
+            tasks_from: verify
+            apply:
+              tags: [ingress_gateway]
+          # Only after a seed that waited for the workloads: the wasm filter comes with them.
+          # A seed that failed before its wait (argocd_seed_root is set by the wait) skips the
+          # check; with --tags ingress_gateway the seed does not run and the check does.
+          when:
+            - argocd_seed_wait | default(true) | bool
+            - not ansible_check_mode
+            - ansible_failed_task is not defined or argocd_seed_root is defined
+          tags: always
 
-    - name: Add the trace links to the console menu
-      ansible.builtin.include_role:
-        name: console_links
-        apply:
-          tags: [console_links]
-      when: observability_enabled | bool
-      tags: always
+        - name: Add the trace links to the console menu
+          ansible.builtin.include_role:
+            name: console_links
+            apply:
+              tags: [console_links]
+          when: observability_enabled | bool
+          tags: always
 
-    - name: Check that the model uses the pre-pulled images
-      ansible.builtin.include_role:
-        name: model_prepull
-        tasks_from: verify
-        apply:
-          tags: [model_prepull]
-      when: model_prepull_enabled | bool
-      tags: always
+        - name: Check that the model uses the pre-pulled images
+          ansible.builtin.include_role:
+            name: model_prepull
+            tasks_from: verify
+            apply:
+              tags: [model_prepull]
+          when: model_prepull_enabled | bool
+          tags: always
