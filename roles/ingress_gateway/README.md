@@ -25,7 +25,10 @@ not recreated. Clients should still prefer streaming.
 ## After the seed: Kuadrant wasm module
 
 `tasks/verify.yml` runs from `playbooks/30-gitops-seed.yml`, after the seed (only when the seed
-waits for the workloads). When gitops applies the AuthPolicy, Kuadrant adds a wasm filter to the
+waits for the workloads). It runs also when the seed wait fails (an Application that never gets
+Healthy), in the `always` part of a block; the play still fails at the end. On 2026-10-02 the
+triage-agent kept the root Application Progressing, the check did not run and a broken gateway pod
+answered 503 to every request. When gitops applies the AuthPolicy, Kuadrant adds a wasm filter to the
 Gateway. Each gateway Envoy downloads the module once from the Service `kuadrant-operator-wasm`
 (namespace `openshift-operators`), with no retry. If the download fails, the pod answers **503**
 to every request (Envoy access log: `wasm_fail_stream`) and stays broken. This happened on
