@@ -1,6 +1,8 @@
 ---
 # KedaController operand (cluster-wide KEDA + optional HTTP add-on for HTTPScaledObject).
 # Name and namespace must match the Custom Metrics Autoscaler Operator install namespace.
+# httpAddon.enabled is always written: the role merges this file into the existing object,
+# so a missing field would not turn the add-on off.
 apiVersion: keda.sh/v1alpha1
 kind: KedaController
 metadata:
@@ -8,7 +10,5 @@ metadata:
   namespace: {{ namespace }}
 spec:
   watchNamespace: ""
-{% if http_addon_enabled | bool %}
   httpAddon:
-    enabled: true
-{% endif %}
+    enabled: {{ http_addon_enabled | bool | lower }}

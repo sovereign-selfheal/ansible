@@ -207,7 +207,7 @@ operators:
     namespace: "{{ keda_namespace }}"
     namespace_cluster_monitoring: true
     channel: stable                               # only channel
-    starting_csv: custom-metrics-autoscaler-operator.v2.19.0-2   # resolved on OCP 4.22.14 on 2026-10-04
+    starting_csv: custom-metrics-autoscaler.v2.19.0-4   # resolved on OCP 4.22.15 on 2026-10-04
     source: redhat-operators
     source_namespace: openshift-marketplace
     install_plan_approval: Manual
@@ -233,6 +233,33 @@ operators:
           status_field: phase
           value: Installation Succeeded
           timeout: 600
+      # The operator creates a default KedaController and installs KEDA before the patch above.
+      # The status has no observedGeneration, so the phase wait can pass before the HTTP add-on
+      # exists: wait for its three Deployments too.
+      - wait:
+          api_version: apps/v1
+          kind: Deployment
+          name: keda-add-ons-http-operator
+          namespace: "{{ keda_namespace }}"
+          condition: {type: Available, status: "True"}
+          timeout: 300
+        enabled: "{{ keda_http_addon_enabled }}"
+      - wait:
+          api_version: apps/v1
+          kind: Deployment
+          name: keda-add-ons-http-interceptor
+          namespace: "{{ keda_namespace }}"
+          condition: {type: Available, status: "True"}
+          timeout: 300
+        enabled: "{{ keda_http_addon_enabled }}"
+      - wait:
+          api_version: apps/v1
+          kind: Deployment
+          name: keda-add-ons-http-scaler
+          namespace: "{{ keda_namespace }}"
+          condition: {type: Available, status: "True"}
+          timeout: 300
+        enabled: "{{ keda_http_addon_enabled }}"
 
   # 2d. Red Hat build of Keycloak: the identity provider of the team users (roles/team_access).
   #     RHDP pre-installs it (namespace keycloak, Automatic): the role adopts that Subscription.

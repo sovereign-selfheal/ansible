@@ -24,7 +24,7 @@ Declared in `group_vars/all/main.yml` (`operators`) and installed in this order 
 | `openshift_gitops` | openshift-gitops-operator | redhat-operators | openshift-gitops-operator | gitops-1.21 | openshift-gitops-operator.v1.21.4 | yes |
 | `cert_manager` | openshift-cert-manager-operator | redhat-operators | cert-manager-operator | stable-v1.20 | cert-manager-operator.v1.20.0 | yes |
 | `external_secrets` | openshift-external-secrets-operator | redhat-operators | external-secrets-operator | stable-v1.2 | openshift-external-secrets-operator.v1.2.1 | yes |
-| `keda` | openshift-custom-metrics-autoscaler-operator (+ HTTP add-on on `KedaController`) | redhat-operators | openshift-keda | stable | custom-metrics-autoscaler-operator.v2.19.0-2 | `keda_enabled` |
+| `keda` | openshift-custom-metrics-autoscaler-operator (+ HTTP add-on on `KedaController`) | redhat-operators | openshift-keda | stable | custom-metrics-autoscaler.v2.19.0-4 | `keda_enabled` |
 | `rhbk` | rhbk-operator (Red Hat build of Keycloak; adopted on RHDP) | redhat-operators | keycloak | stable-v26.6 | rhbk-operator.v26.6.7-opr.1 | `team_access_enabled` |
 | `rhcl` | rhcl-operator (+ authorino, limitador, dns) | redhat-operators | openshift-operators | stable | rhcl-operator.v1.4.3 | yes |
 | `authorino` | authorino-operator (RHCL dependency, adopted) | redhat-operators | openshift-operators | stable | authorino-operator.v1.4.3 | yes |
@@ -37,7 +37,7 @@ Declared in `group_vars/all/main.yml` (`operators`) and installed in this order 
 | `tempo` | tempo-product (Tempo Operator) | redhat-operators | openshift-tempo-operator | stable | tempo-operator.v0.22.0-2 | `observability_enabled` |
 | `cluster_observability` | cluster-observability-operator (+ UIPlugin `distributed-tracing`) | redhat-operators | openshift-cluster-observability-operator | stable | cluster-observability-operator.v1.5.2 | `observability_enabled` |
 
-Pins were resolved on OCP 4.22.14 on 2026-09-23; the three observability operators on 2026-09-26; rhbk on 2026-09-28. To refresh them against a cluster:
+Pins were resolved on OCP 4.22.14 on 2026-09-23; the three observability operators on 2026-09-26; rhbk on 2026-09-28; keda on OCP 4.22.15 on 2026-10-04. To refresh them against a cluster:
 
 ```bash
 scripts/resolve-operator-versions.sh                 # all packages used here
