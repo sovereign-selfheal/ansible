@@ -21,6 +21,7 @@ DEFAULT_PACKAGES=(
   openshift-gitops-operator:redhat-operators
   openshift-cert-manager-operator:redhat-operators
   openshift-external-secrets-operator:redhat-operators
+  openshift-custom-metrics-autoscaler-operator:redhat-operators
   rhbk-operator:redhat-operators
   rhcl-operator:redhat-operators
   authorino-operator:redhat-operators

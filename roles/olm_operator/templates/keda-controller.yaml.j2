@@ -1,0 +1,14 @@
+---
+# KedaController operand (cluster-wide KEDA + optional HTTP add-on for HTTPScaledObject).
+# Name and namespace must match the Custom Metrics Autoscaler Operator install namespace.
+apiVersion: keda.sh/v1alpha1
+kind: KedaController
+metadata:
+  name: keda
+  namespace: {{ namespace }}
+spec:
+  watchNamespace: ""
+{% if http_addon_enabled | bool %}
+  httpAddon:
+    enabled: true
+{% endif %}

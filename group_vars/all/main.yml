@@ -54,6 +54,13 @@ observability_collector_service_account: otel-collector
 # ServiceMonitors of the demo namespaces (router metrics, vLLM metrics).
 user_workload_monitoring_enabled: true
 
+# ----- KEDA (Custom Metrics Autoscaler, roles/olm_operator) ---------------------------
+# Prerequisite for gitops workloads that use ScaledObject / HTTPScaledObject. The HTTP add-on
+# (HTTPScaledObject) is enabled on the cluster KedaController, not a separate OLM operator.
+keda_enabled: true
+keda_namespace: openshift-keda
+keda_http_addon_enabled: true
+
 # ----- Team access (roles/team_access, playbooks/15-identity.yml) ---------------------
 # Personal logins for the team: Keycloak users (realm `sso` on RHDP), members of the OpenShift
 # Group below, which is cluster-admin and Argo CD admin. The users are set in the vault only
@@ -194,7 +201,40 @@ operators:
           namespace: external-secrets
           condition: {type: Available, status: "True"}
 
-  # 2c. Red Hat build of Keycloak: the identity provider of the team users (roles/team_access).
+  # 2c. Custom Metrics Autoscaler (KEDA). HTTPScaledObject needs spec.httpAddon on KedaController.
+  - key: keda
+    name: openshift-custom-metrics-autoscaler-operator
+    namespace: "{{ keda_namespace }}"
+    namespace_cluster_monitoring: true
+    channel: stable                               # only channel
+    starting_csv: custom-metrics-autoscaler-operator.v2.19.0-2   # resolved on OCP 4.22.14 on 2026-10-04
+    source: redhat-operators
+    source_namespace: openshift-marketplace
+    install_plan_approval: Manual
+    create_operator_group: true
+    operator_group_all_namespaces: false          # OwnNamespace: KedaController lives here
+    enabled: "{{ keda_enabled }}"
+    post_install:
+      - wait_exists:
+          api_version: keda.sh/v1alpha1
+          kind: KedaController
+          name: keda
+          namespace: "{{ keda_namespace }}"
+          timeout: 300
+      - template: keda-controller.yaml.j2
+        vars:
+          namespace: "{{ keda_namespace }}"
+          http_addon_enabled: "{{ keda_http_addon_enabled }}"
+        wait:
+          api_version: keda.sh/v1alpha1
+          kind: KedaController
+          name: keda
+          namespace: "{{ keda_namespace }}"
+          status_field: phase
+          value: Installation Succeeded
+          timeout: 600
+
+  # 2d. Red Hat build of Keycloak: the identity provider of the team users (roles/team_access).
   #     RHDP pre-installs it (namespace keycloak, Automatic): the role adopts that Subscription.
   #     Only when team_access_enabled.
   - key: rhbk
