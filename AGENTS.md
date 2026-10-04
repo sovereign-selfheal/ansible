@@ -88,6 +88,7 @@ oc get packagemanifests -n openshift-marketplace <package> \
 | `openshift_gitops` | Red Hat OpenShift GitOps | `openshift-gitops-operator` | `openshift-gitops-operator` | `gitops-1.21` | Installed **first**; Argo CD is used by everything downstream. Pre-installed by RHDP (`latest`, Automatic): the role adopts it (`allow_newer_installed: true`) |
 | `cert_manager` | cert-manager Operator for Red Hat OpenShift | `openshift-cert-manager-operator` | `cert-manager-operator` | `stable-v1.20` | Prerequisite of RHOAI 3.x KServe. Pre-installed by RHDP: adopted (`allow_newer_installed: true`) |
 | `external_secrets` | External Secrets Operator for Red Hat OpenShift | `openshift-external-secrets-operator` | `external-secrets-operator` | `stable-v1.2` | Post-install: `ExternalSecretsConfig/cluster` (the operator deploys the controller into `external-secrets`), then waits for the webhook. The `ClusterSecretStore` comes later, when the backend is chosen |
+| `keda` | Custom Metrics Autoscaler (KEDA) | `openshift-custom-metrics-autoscaler-operator` | `openshift-keda` | `stable` (only channel) | Prerequisite for `ScaledObject` / `HTTPScaledObject` in gitops. The operator creates a default `KedaController/keda`. Post-install: the role sets `spec.httpAddon.enabled` from `keda_http_addon_enabled` (the HTTP add-on is not a separate OLM operator), waits for `Installation Succeeded`, then for the three `keda-add-ons-http-*` Deployments. Only when `keda_enabled` |
 | `rhbk` | Red Hat build of Keycloak | `rhbk-operator` | `keycloak` | `stable-v26.6` | Only when `team_users` is set (vault). Pre-installed by RHDP: adopted (`allow_newer_installed: true`, approved 2026-09-28). The Keycloak instance, realm and users are handled by `roles/team_access` (stage 15) |
 | `rhcl` | Red Hat Connectivity Link (Kuadrant) | `rhcl-operator` | `openshift-operators` | `stable` (only channel) | Before RHOAI. Brings `authorino-operator`, `limitador-operator`, `dns-operator` as OLM dependencies (pinned in `expected_dependency_csvs`). Post-install: GatewayClass, `Kuadrant` in `kuadrant-system`, Authorino TLS. The LLM gateway and its policies are deployed by GitOps |
 | `authorino` / `limitador` / `dns_operator` | RHCL dependencies | `authorino-operator` / `limitador-operator` / `dns-operator` | `openshift-operators` | `stable` | OLM creates their Subscriptions while it installs `rhcl` (Automatic). These entries adopt them by name (`subscription_name`) and set Manual approval + pinned startingCSV |
@@ -98,7 +99,7 @@ oc get packagemanifests -n openshift-marketplace <package> \
 | `tempo` | Tempo Operator | `tempo-product` | `openshift-tempo-operator` | `stable` (only channel) | Only when `observability_enabled: true`. The Tempo instance is deployed by GitOps |
 | `cluster_observability` | Cluster Observability Operator | `cluster-observability-operator` | `openshift-cluster-observability-operator` | `stable` | Only when `observability_enabled: true`. Post-install: `UIPlugin/distributed-tracing` (console *Observe → Traces*), `UIPlugin/monitoring` with Perses (console *Observe → Dashboards*) |
 
-Verified on OCP 4.22.14 on 2026-09-23 (the three observability operators on 2026-09-26); pinned CSVs
+Verified on OCP 4.22.14 on 2026-09-23 (the three observability operators on 2026-09-26, KEDA on OCP 4.22.15 on 2026-10-04); pinned CSVs
 are in `group_vars/all/main.yml`. The observability operators have AllNamespaces as the only install
 mode and each one gets its own namespace, not `openshift-operators` (see the Manual approval note there).
 
@@ -248,7 +249,8 @@ The same contract is in `gitops/AGENTS.md` §2. Keep both in sync.
   Authorino (`kuadrant-system`), the `TelemetryPolicy` `openshift-ai-inference-labels` (a Kuadrant policy,
   but it must sit next to the Gateway: label `tier` on the Limitador counters, from the `tier` filter of
   the gitops AuthPolicy),
-  GPU nodes, the namespaces `local-models`, `maas-routing` and `agentic-triage`, the External Secrets Operator, the
+  GPU nodes, the namespaces `local-models`, `maas-routing` and `agentic-triage`, the Custom Metrics Autoscaler
+  Operator and cluster `KedaController` (including the HTTP add-on when enabled), the External Secrets Operator, the
   `ClusterSecretStore` and its source Secrets (namespace `sovereign-selfheal-secrets`), the model image
   pre-pull DaemonSets (namespace `sovereign-selfheal-prepull`), the Argo CD settings, the root Application,
   the observability operators (OpenTelemetry, Tempo, Cluster Observability), the `UIPlugin`s

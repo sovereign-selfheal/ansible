@@ -108,6 +108,7 @@ Templates only see the item's `vars`, so they contain no cluster-specific values
 | `nfd-instance.yaml.j2` | NodeFeatureDiscovery | `Available=True` |
 | `gpu-cluster-policy.yaml.j2` | NVIDIA ClusterPolicy | `status.state == ready` |
 | `external-secrets-config.yaml.j2` | ExternalSecretsConfig `cluster` (ESO) | `Ready=True`, then Deployment `external-secrets-webhook` `Available` |
+| `keda-controller.yaml.j2` | KedaController `keda` (KEDA + optional HTTP add-on) | `status.phase == Installation Succeeded`, then the Deployments `keda-add-ons-http-*` `Available` (add-on on) |
 | `uiplugin-distributed-tracing.yaml.j2` | UIPlugin `distributed-tracing` (COO console plugin) | `Available=True` |
 | `uiplugin-monitoring-perses.yaml.j2` | UIPlugin `monitoring` with Perses (COO dashboards in the console) | `Available=True` |
 | `tempo-tenant-rbac.yaml.j2` | ClusterRole + ClusterRoleBinding: the collector may write a Tempo tenant | none |
