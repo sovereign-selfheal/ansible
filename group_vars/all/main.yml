@@ -126,6 +126,13 @@ gpu_node_prep_replicas: 1
 # NOT supported by Red Hat): a second GPU pool (gpu_node_prep_decision_*, one g6e.2xlarge with an
 # NVIDIA L40S), its pre-pull, and decisionModel.enabled for the gitops seed. Off by default.
 decision_model_enabled: false
+# Namespace policy of the router (v0.11.0): a request about a namespace labelled
+# sovereign-selfheal.io/data-class=restricted stays on the local model. The seed always creates the
+# labels (agentic-triage: public, payments: restricted) and the RBAC; these switches turn the
+# router on (gitops namespacePolicy.scan/hint). scan: names found in the request text; hint: names
+# that the agents send (triage-agent sends them).
+namespace_policy_scan: false
+namespace_policy_hint: false
 
 nfd_instance_name: nfd-instance
 gpu_cluster_policy_name: gpu-cluster-policy

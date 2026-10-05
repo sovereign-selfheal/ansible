@@ -72,7 +72,10 @@
           'classifier': {'mode': argocd_seed_classifier_mode},
           'observability': {'enabled': argocd_seed_observability_enabled | bool},
           'decisionModel': {'enabled': argocd_seed_decision_model_enabled | bool},
-          'namespaces': {'observability': argocd_seed_observability_namespace},
+          'namespacePolicy': {'scan': argocd_seed_namespace_policy_scan | bool,
+                              'hint': argocd_seed_namespace_policy_hint | bool},
+          'namespaces': {'observability': argocd_seed_observability_namespace,
+                         'triageRestricted': argocd_seed_restricted_namespace},
           'repo': {'url': argocd_seed_repo_url, 'targetRevision': argocd_seed_revision}}
          | combine({'localModel': {'profiles': {argocd_seed_model_profile: {'nodeSelector': argocd_seed_local_model_node_selector}}}}
                    if argocd_seed_local_model_node_selector | length > 0 else {}, recursive=true)
@@ -91,6 +94,20 @@
   loop_control:
     loop_var: argocd_seed_ns
     label: "{{ argocd_seed_ns.name }}"
+
+- name: Ensure the cluster roles for gitops components
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: ClusterRole
+      metadata:
+        name: "{{ argocd_seed_cr.name }}"
+      rules: "{{ argocd_seed_cr.rules }}"
+  loop: "{{ argocd_seed_cluster_roles }}"
+  loop_control:
+    loop_var: argocd_seed_cr
+    label: "{{ argocd_seed_cr.name }}"
 
 - name: Ensure the cluster role bindings for gitops components
   kubernetes.core.k8s:

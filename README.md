@@ -292,6 +292,23 @@ Measured on 2026-09-30 (ocp.5bw8q, spike with a hand-made MachineSet of the same
 | Preview vLLM image (6.2 GB) | about 5 min, restarted once by the CRI-O restart of the NVIDIA toolkit |
 | vLLM start -> ready (weights 207 s from a gp3 volume, engine 30 s) | 5 min 11 s |
 
+## Namespace policy (optional)
+
+The seed creates the namespace `payments` for a second quarkus-buggy-app and labels the namespaces of
+the triage demo: `agentic-triage` with `sovereign-selfheal.io/data-class=public`, `payments` with
+`restricted`. It also binds get/list/watch on namespaces to the ServiceAccount `maas-routing/litellm`
+(ClusterRole `sovereign-selfheal-namespace-reader`). Since router v0.11.0 a request about a restricted
+namespace stays on the local model. Two switches turn the router policy on, both off by default:
+
+```bash
+scripts/run-playbook.sh playbooks/30-gitops-seed.yml -e namespace_policy_scan=true -e namespace_policy_hint=true
+```
+
+`namespace_policy_scan` finds namespace names in the request text; `namespace_policy_hint` reads the
+names that the agents send. A live `oc label namespace payments sovereign-selfheal.io/data-class=public
+--overwrite` lasts until the next seed run, which sets the labels back. Details: gitops README
+"Namespace policy" and router README "Namespace policy".
+
 ## Observability (traces and metrics of the router)
 
 The demo shows each routing decision as a trace (console: *Observe → Traces*) and as metrics
