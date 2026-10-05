@@ -215,12 +215,14 @@ operators:
     operator_group_all_namespaces: false          # OwnNamespace: KedaController lives here
     enabled: "{{ keda_enabled }}"
     post_install:
+      # Optional: the template below creates the KedaController when the operator did not.
       - wait_exists:
           api_version: keda.sh/v1alpha1
           kind: KedaController
           name: keda
           namespace: "{{ keda_namespace }}"
           timeout: 300
+          optional: true
       - template: keda-controller.yaml.j2
         vars:
           namespace: "{{ keda_namespace }}"

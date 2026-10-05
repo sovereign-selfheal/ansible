@@ -64,6 +64,7 @@ post_install:
     enabled: true                      # optional toggle
     wait_exists:                       # optional: wait until an object exists before applying
       {api_version: v1, kind: Service, name: my-svc, namespace: ns, timeout: 600}
+      # optional: true                 # do not fail when the object never appears
     wait:                              # optional readiness wait, either a condition...
       api_version: datasciencecluster.opendatahub.io/v2
       kind: DataScienceCluster
@@ -75,6 +76,13 @@ post_install:
 
 `template` is optional: an item with only `wait_exists` is a pure wait (used after the GatewayClass
 to wait for the Istio `wasmplugins.extensions.istio.io` CRD).
+
+A missing object fails the item. `k8s_info` with `wait` does not fail when the object never appears
+(it returns no object after `timeout`), so the role checks the result of `wait_exists` and of a
+`wait.condition`: the item fails with the kind, name, namespace and timeout of the object. Set
+`optional: true` in `wait_exists` or `wait` when the object may never appear, for example the
+`KedaController` that the template creates when the operator did not. A `wait.status_field` already
+fails when the object is missing.
 
 ### Adopting a Subscription created by someone else
 
