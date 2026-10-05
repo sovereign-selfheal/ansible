@@ -52,6 +52,14 @@ argocd_seed_cluster_roles:
       - apiGroups: [""]
         resources: [namespaces]
         verbs: [get, list, watch]
+  # Live page of the routing decisions: its button changes the data-class label of the demo
+  # namespaces only, after a SelfSubjectAccessReview with the token of the signed-in user.
+  - name: sovereign-selfheal-demo-namespace-labeler
+    rules:
+      - apiGroups: [""]
+        resources: [namespaces]
+        resourceNames: [agentic-triage, "{{ argocd_seed_restricted_namespace }}"]
+        verbs: [get, patch]
 
 # Cluster-level RBAC prerequisites for gitops components.
 argocd_seed_cluster_role_bindings:
@@ -68,6 +76,10 @@ argocd_seed_cluster_role_bindings:
     namespace: maas-routing
     service_account: routing-live-view
     cluster_role: sovereign-selfheal-namespace-reader
+  - name: routing-live-view-demo-namespace-labeler
+    namespace: maas-routing
+    service_account: routing-live-view
+    cluster_role: sovereign-selfheal-demo-namespace-labeler
 
 # Values of the root Application (bootstrap/values.yaml in the gitops repo).
 argocd_seed_model_profile: "{{ 'gpu' if (gpu_enabled | default(true) | bool) else 'cpu' }}"
