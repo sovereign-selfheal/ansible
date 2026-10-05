@@ -297,7 +297,8 @@ Measured on 2026-09-30 (ocp.5bw8q, spike with a hand-made MachineSet of the same
 The seed creates the namespace `payments` for a second quarkus-buggy-app and labels the namespaces of
 the triage demo: `agentic-triage` with `sovereign-selfheal.io/data-class=public`, `payments` with
 `restricted`. It also binds get/list/watch on namespaces to the ServiceAccount `maas-routing/litellm`
-(ClusterRole `sovereign-selfheal-namespace-reader`). Since router v0.11.0 a request about a restricted
+(ClusterRole `sovereign-selfheal-namespace-reader`), and the same ClusterRole to
+`maas-routing/routing-live-view` (the live page of the routing decisions). Since router v0.11.0 a request about a restricted
 namespace stays on the local model. Two switches turn the router policy on, both off by default:
 
 ```bash

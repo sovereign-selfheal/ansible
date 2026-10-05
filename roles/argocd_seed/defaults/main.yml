@@ -63,6 +63,11 @@ argocd_seed_cluster_role_bindings:
     namespace: maas-routing
     service_account: litellm
     cluster_role: sovereign-selfheal-namespace-reader
+  # Live page of the routing decisions (gitops component routing-live-view): shows the labels.
+  - name: routing-live-view-namespace-reader
+    namespace: maas-routing
+    service_account: routing-live-view
+    cluster_role: sovereign-selfheal-namespace-reader
 
 # Values of the root Application (bootstrap/values.yaml in the gitops repo).
 argocd_seed_model_profile: "{{ 'gpu' if (gpu_enabled | default(true) | bool) else 'cpu' }}"
