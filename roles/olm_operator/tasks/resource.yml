@@ -3,6 +3,9 @@
 # Item fields: template (optional: an item can be a pure wait), vars, state (present|patched),
 # wait_exists, wait, enabled. olm_operator_resource_gate is false for post_install items
 # while the operator is not installed (check mode only): their CRDs do not exist yet.
+# k8s_info with wait returns no object, without failing, when the object never appears. So the
+# waits of wait_exists and wait.condition are checked: a missing object fails the item, unless
+# wait_exists.optional / wait.optional is true (the object may never appear).
 
 - name: "Skip in check mode when the operator is not installed: {{ olm_operator_post.template | default('wait') }}"
   ansible.builtin.debug:
@@ -20,9 +23,25 @@
         namespace: "{{ olm_operator_post.wait_exists.namespace | default(omit) }}"
         wait: true
         wait_timeout: "{{ olm_operator_post.wait_exists.timeout | default(olm_operator_post_install_timeout) }}"
+      register: olm_operator_post_exists
       when:
         - olm_operator_post.wait_exists is defined
         - not ansible_check_mode
+
+    - name: Check that the resource exists
+      ansible.builtin.assert:
+        that: olm_operator_post_exists.resources | length > 0
+        fail_msg: >-
+          {{ olm_operator_key }}: {{ _w.kind }} {{ _w.name }}{{ ' in ' ~ _w.namespace if _w.namespace is defined else '' }}
+          did not appear within {{ _w.timeout | default(olm_operator_post_install_timeout) }} s.
+          Set wait_exists.optional to true if it may never appear.
+        quiet: true
+      vars:
+        _w: "{{ olm_operator_post.wait_exists }}"
+      when:
+        - olm_operator_post.wait_exists is defined
+        - not ansible_check_mode
+        - not (olm_operator_post.wait_exists.optional | default(false) | bool)
 
     - name: "Apply {{ olm_operator_post.template | default('') }}"
       when: olm_operator_post.template is defined
@@ -43,9 +62,25 @@
         wait_condition: "{{ olm_operator_post.wait.condition }}"
         wait_sleep: "{{ olm_operator_poll_delay }}"
         wait_timeout: "{{ olm_operator_post.wait.timeout | default(olm_operator_post_install_timeout) }}"
+      register: olm_operator_post_condition
       when:
         - olm_operator_post.wait.condition is defined
         - not ansible_check_mode
+
+    - name: Check that the resource of the condition exists
+      ansible.builtin.assert:
+        that: olm_operator_post_condition.resources | length > 0
+        fail_msg: >-
+          {{ olm_operator_key }}: {{ _w.kind }} {{ _w.name }}{{ ' in ' ~ _w.namespace if _w.namespace is defined else '' }}
+          did not appear within {{ _w.timeout | default(olm_operator_post_install_timeout) }} s.
+          Set wait.optional to true if it may never appear.
+        quiet: true
+      vars:
+        _w: "{{ olm_operator_post.wait }}"
+      when:
+        - olm_operator_post.wait.condition is defined
+        - not ansible_check_mode
+        - not (olm_operator_post.wait.optional | default(false) | bool)
 
     - name: Wait for the status field
       kubernetes.core.k8s_info:
