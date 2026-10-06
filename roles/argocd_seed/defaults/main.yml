@@ -110,7 +110,7 @@ argocd_seed_local_model_node_selector: >-
      else {} }}
 # Namespace policy of the router (gitops namespacePolicy.scan/hint). Always sent, so that turning
 # it off also reaches the root Application.
-argocd_seed_namespace_policy_scan: "{{ namespace_policy_scan | default(false) }}"
+argocd_seed_namespace_policy_scan: "{{ namespace_policy_scan | default(true) }}"
 argocd_seed_namespace_policy_hint: "{{ namespace_policy_hint | default(false) }}"
 # Any other value of bootstrap/values.yaml, merged last (for example {tiers: [...]}).
 argocd_seed_extra_values: {}

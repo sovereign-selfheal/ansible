@@ -129,9 +129,9 @@ decision_model_enabled: false
 # Namespace policy of the router (v0.11.0): a request about a namespace labelled
 # sovereign-selfheal.io/data-class=restricted stays on the local model. The seed always creates the
 # labels (agentic-triage: public, payments: restricted) and the RBAC; these switches turn the
-# router on (gitops namespacePolicy.scan/hint). scan: names found in the request text; hint: names
-# that the agents send (triage-agent sends them).
-namespace_policy_scan: false
+# router on (gitops namespacePolicy.scan/hint). scan: names found in the request text, on for the
+# demo; hint: names that the agents send (off until the triage-agent release that sends them).
+namespace_policy_scan: true
 namespace_policy_hint: false
 
 nfd_instance_name: nfd-instance
