@@ -249,21 +249,27 @@ The same contract is in `gitops/AGENTS.md` §2. Keep both in sync.
   Authorino (`kuadrant-system`), the `TelemetryPolicy` `openshift-ai-inference-labels` (a Kuadrant policy,
   but it must sit next to the Gateway: label `tier` on the Limitador counters, from the `tier` filter of
   the gitops AuthPolicy),
-  GPU nodes, the namespaces `local-models`, `maas-routing` and `agentic-triage`, the Custom Metrics Autoscaler
+  GPU nodes, the namespaces `local-models`, `maas-routing`, `agentic-triage` and `payments`
+  (`argocd_seed_restricted_namespace`) with their `sovereign-selfheal.io/data-class` labels
+  (`agentic-triage` public, `payments` restricted), the Custom Metrics Autoscaler
   Operator and cluster `KedaController` (including the HTTP add-on when enabled), the External Secrets Operator, the
   `ClusterSecretStore` and its source Secrets (namespace `sovereign-selfheal-secrets`), the model image
   pre-pull DaemonSets (namespace `sovereign-selfheal-prepull`), the Argo CD settings, the root Application,
   the observability operators (OpenTelemetry, Tempo, Cluster Observability), the `UIPlugin`s
   `distributed-tracing` and `monitoring` (Perses), the Tempo tenant write permission (ClusterRole + ClusterRoleBinding
   `tempo-traces-write-<tenant>`), the ClusterRoleBinding `prometheus-mcp-server-sa-cluster-monitoring-view`,
+  the ClusterRole `sovereign-selfheal-namespace-reader` (get/list/watch namespaces) and its bindings
+  `litellm-namespace-reader` and `routing-live-view-namespace-reader` (ServiceAccounts `litellm` and
+  `routing-live-view` of `maas-routing`), the ClusterRole `sovereign-selfheal-demo-namespace-labeler`
+  (patch on the two demo namespaces only) and its binding `routing-live-view-demo-namespace-labeler`,
   the console menu links to the router traces (`ConsoleLink`
   `sovereign-traces-*`), the namespace `observability`, user workload monitoring
   (`enableUserWorkload` in `cluster-monitoring-config`; retention and volume of the user workload
   Prometheus in `user-workload-monitoring-config`), team access when `team_users` is set (Keycloak
   in the namespace `keycloak` when this repo installs it: PostgreSQL, `Keycloak` CR, Route; realm, client,
   users; the OAuth IdP; `Group/selfheal-team` and its ClusterRoleBinding; the Argo CD RBAC line of that Group).
-  `gitops`: every object inside `local-models`, `maas-routing`, `agentic-triage` and `observability`.
-- **Namespaces** `local-models`, `maas-routing`, `agentic-triage` and `observability` carry `argocd.argoproj.io/managed-by: openshift-gitops`
+  `gitops`: every object inside `local-models`, `maas-routing`, `agentic-triage`, `payments` and `observability`.
+- **Namespaces** `local-models`, `maas-routing`, `agentic-triage`, `payments` and `observability` carry `argocd.argoproj.io/managed-by: openshift-gitops`
   (the default Argo CD instance manages only labelled namespaces), and `local-models` also
   `opendatahub.io/dashboard: "true"` and `modelmesh-enabled: "false"`.
 - **Root Application** (`30-gitops-seed.yml`): path `bootstrap` of the gitops repo, with `helm.valuesObject`:
@@ -272,8 +278,16 @@ The same contract is in `gitops/AGENTS.md` §2. Keep both in sync.
   `false`: no reasoning), `secretStore.enabled`, `classifier.mode`
   (`classifier_mode`: `local` = the local model classifies, default; `external`; `off`),
   `observability.enabled` (`observability_enabled`, default `true`), `namespaces.observability`,
-  `decisionModel.enabled` (`decision_model_enabled`, default `false`), and, only with the decision model
-  and managed GPU nodes, `localModel.profiles.gpu.nodeSelector` (`node-role.kubernetes.io/gpu: ""`).
+  `decisionModel.enabled` (`decision_model_enabled`, default `false`), `namespacePolicy.scan`
+  (`namespace_policy_scan`, default `true`), `namespacePolicy.hint` (`namespace_policy_hint`, default
+  `false`), `namespaces.triageRestricted` (`argocd_seed_restricted_namespace`, default `payments`), and,
+  only with the decision model and managed GPU nodes, `localModel.profiles.gpu.nodeSelector`
+  (`node-role.kubernetes.io/gpu: ""`).
+- **Namespace policy** (router v0.11.0): this repo owns the data-class labels and the RBAC that lets the
+  router (ServiceAccount `litellm`) and the live page (`routing-live-view`) read them; `gitops` turns the
+  router policy on with `namespacePolicy.scan/hint` and deploys the second quarkus-buggy-app in
+  `namespaces.triageRestricted`. Keep the namespace name, the ServiceAccount names and the label key equal
+  in both repos.
 - **Decision model** (`decision_model_enabled`): this repo creates the `gpu-decision` GPU pool
   (`roles/gpu_node_prep`, node label `node-role.kubernetes.io/gpu-decision`) and the pre-pull of its images
   (`model_prepull_decision_images`, same digests as `decisionModel` in `gitops/bootstrap/values.yaml`).
