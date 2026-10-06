@@ -292,6 +292,29 @@ Measured on 2026-09-30 (ocp.5bw8q, spike with a hand-made MachineSet of the same
 | Preview vLLM image (6.2 GB) | about 5 min, restarted once by the CRI-O restart of the NVIDIA toolkit |
 | vLLM start -> ready (weights 207 s from a gp3 volume, engine 30 s) | 5 min 11 s |
 
+## Namespace policy
+
+The seed creates the namespace `payments` for a second quarkus-buggy-app and labels the namespaces of
+the triage demo: `agentic-triage` with `sovereign-selfheal.io/data-class=public`, `payments` with
+`restricted`. It also binds get/list/watch on namespaces to the ServiceAccount `maas-routing/litellm`
+(ClusterRole `sovereign-selfheal-namespace-reader`), and the same ClusterRole to
+`maas-routing/routing-live-view` (the live page of the routing decisions), which also gets `patch` on
+the two demo namespaces only (ClusterRole `sovereign-selfheal-demo-namespace-labeler`, for its button
+"Mark as restricted/public"; the page checks the RBAC of the signed-in user first). Since router v0.11.0 a request about a restricted
+namespace stays on the local model. Two switches turn the router policy on:
+`namespace_policy_scan` (on by default) finds namespace names in the request text;
+`namespace_policy_hint` (off by default) reads the names that the agents send. To turn the hint on, or
+the whole policy off:
+
+```bash
+scripts/run-playbook.sh playbooks/30-gitops-seed.yml -e namespace_policy_hint=true
+scripts/run-playbook.sh playbooks/30-gitops-seed.yml -e namespace_policy_scan=false
+```
+
+A live `oc label namespace payments sovereign-selfheal.io/data-class=public
+--overwrite` lasts until the next seed run, which sets the labels back. Details: gitops README
+"Namespace policy" and router README "Namespace policy".
+
 ## Observability (traces and metrics of the router)
 
 The demo shows each routing decision as a trace (console: *Observe → Traces*) and as metrics

@@ -11,8 +11,14 @@ argocd_seed_repo_url: https://github.com/sovereign-selfheal/gitops.git
 argocd_seed_revision: main
 argocd_seed_path: bootstrap
 
+# Namespace of the second quarkus-buggy-app (gitops namespaces.triageRestricted).
+argocd_seed_restricted_namespace: payments
+
 # Workload namespaces, created here because the default Argo CD instance cannot create
 # namespaces. The managed-by label gives that instance admin rights in them.
+# sovereign-selfheal.io/data-class is the label of the namespace policy (router v0.11.0): a request
+# about a `restricted` namespace stays on the local model; no label or `public` keeps the normal
+# routing. A new seed run sets these labels back (a live `oc label` lasts until then).
 argocd_seed_namespaces:
   - name: local-models
     labels:
@@ -25,11 +31,35 @@ argocd_seed_namespaces:
   - name: agentic-triage
     labels:
       argocd.argoproj.io/managed-by: "{{ argocd_seed_namespace }}"
+      sovereign-selfheal.io/data-class: public
+  # Second quarkus-buggy-app of the triage demo: the agent investigates it with the local model only.
+  - name: "{{ argocd_seed_restricted_namespace }}"
+    labels:
+      argocd.argoproj.io/managed-by: "{{ argocd_seed_namespace }}"
+      sovereign-selfheal.io/data-class: restricted
   # Tempo and the OpenTelemetry collector (gitops component observability). Created also when
   # observability_enabled is false: an empty namespace costs nothing and keeps the contract simple.
   - name: "{{ argocd_seed_observability_namespace }}"
     labels:
       argocd.argoproj.io/managed-by: "{{ argocd_seed_namespace }}"
+
+# Cluster roles for gitops components (the AppProject of the gitops repo allows no
+# cluster-scoped objects).
+argocd_seed_cluster_roles:
+  # Namespace policy of the router (v0.11.0): the hook lists the namespaces with the data-class label.
+  - name: sovereign-selfheal-namespace-reader
+    rules:
+      - apiGroups: [""]
+        resources: [namespaces]
+        verbs: [get, list, watch]
+  # Live page of the routing decisions: its button changes the data-class label of the demo
+  # namespaces only, after a SelfSubjectAccessReview with the token of the signed-in user.
+  - name: sovereign-selfheal-demo-namespace-labeler
+    rules:
+      - apiGroups: [""]
+        resources: [namespaces]
+        resourceNames: [agentic-triage, "{{ argocd_seed_restricted_namespace }}"]
+        verbs: [get, patch]
 
 # Cluster-level RBAC prerequisites for gitops components.
 argocd_seed_cluster_role_bindings:
@@ -37,6 +67,19 @@ argocd_seed_cluster_role_bindings:
     namespace: agentic-triage
     service_account: prometheus-mcp-server-sa
     cluster_role: cluster-monitoring-view
+  - name: litellm-namespace-reader
+    namespace: maas-routing
+    service_account: litellm
+    cluster_role: sovereign-selfheal-namespace-reader
+  # Live page of the routing decisions (gitops component routing-live-view): shows the labels.
+  - name: routing-live-view-namespace-reader
+    namespace: maas-routing
+    service_account: routing-live-view
+    cluster_role: sovereign-selfheal-namespace-reader
+  - name: routing-live-view-demo-namespace-labeler
+    namespace: maas-routing
+    service_account: routing-live-view
+    cluster_role: sovereign-selfheal-demo-namespace-labeler
 
 # Values of the root Application (bootstrap/values.yaml in the gitops repo).
 argocd_seed_model_profile: "{{ 'gpu' if (gpu_enabled | default(true) | bool) else 'cpu' }}"
@@ -65,6 +108,10 @@ argocd_seed_local_model_node_selector: >-
      if (argocd_seed_decision_model_enabled | bool and (gpu_nodes_managed | default(true) | bool)
          and argocd_seed_model_profile == 'gpu')
      else {} }}
+# Namespace policy of the router (gitops namespacePolicy.scan/hint). Always sent, so that turning
+# it off also reaches the root Application.
+argocd_seed_namespace_policy_scan: "{{ namespace_policy_scan | default(true) }}"
+argocd_seed_namespace_policy_hint: "{{ namespace_policy_hint | default(false) }}"
 # Any other value of bootstrap/values.yaml, merged last (for example {tiers: [...]}).
 argocd_seed_extra_values: {}
 
