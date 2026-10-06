@@ -112,6 +112,8 @@ argocd_seed_local_model_node_selector: >-
 # it off also reaches the root Application.
 argocd_seed_namespace_policy_scan: "{{ namespace_policy_scan | default(true) }}"
 argocd_seed_namespace_policy_hint: "{{ namespace_policy_hint | default(false) }}"
+# SOTA budget per tier of the router (gitops sotaBudget.enabled). Always sent, like the switches above.
+argocd_seed_sota_budget_enabled: "{{ sota_budget_enabled | default(false) }}"
 # Any other value of bootstrap/values.yaml, merged last (for example {tiers: [...]}).
 argocd_seed_extra_values: {}
 

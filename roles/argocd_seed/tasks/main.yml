@@ -74,6 +74,7 @@
           'decisionModel': {'enabled': argocd_seed_decision_model_enabled | bool},
           'namespacePolicy': {'scan': argocd_seed_namespace_policy_scan | bool,
                               'hint': argocd_seed_namespace_policy_hint | bool},
+          'sotaBudget': {'enabled': argocd_seed_sota_budget_enabled | bool},
           'namespaces': {'observability': argocd_seed_observability_namespace,
                          'triageRestricted': argocd_seed_restricted_namespace},
           'repo': {'url': argocd_seed_repo_url, 'targetRevision': argocd_seed_revision}}
