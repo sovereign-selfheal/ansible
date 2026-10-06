@@ -315,15 +315,15 @@ A live `oc label namespace payments sovereign-selfheal.io/data-class=public
 --overwrite` lasts until the next seed run, which sets the labels back. Details: gitops README
 "Namespace policy" and router README "Namespace policy".
 
-## SOTA budget per tier (optional)
+## SOTA budget per tier
 
 Since router v0.12.0 each API-key tier can have a budget of SOTA tokens per time window (`sotaTokens` of
 the tiers in the gitops repo). When a tier used it, its requests stay on the local model: the agent goes
 on, without the 429 of the gateway. The gitops repo adds a small Redis in `maas-routing` for the
-counters; this repo only sends the switch, off by default:
+counters; this repo only sends the switch, on by default. To turn it off:
 
 ```bash
-scripts/run-playbook.sh playbooks/30-gitops-seed.yml -e sota_budget_enabled=true
+scripts/run-playbook.sh playbooks/30-gitops-seed.yml -e sota_budget_enabled=false
 ```
 
 Details: gitops README "SOTA budget per tier" and router README "SOTA budget per tier".

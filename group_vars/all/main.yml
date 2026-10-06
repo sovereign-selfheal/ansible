@@ -138,8 +138,8 @@ namespace_policy_hint: false
 # SOTA token budget per tier (router v0.12.0, gitops sotaBudget.enabled): each API-key tier with
 # sotaTokens (gitops tiers) gets a budget of SOTA tokens per window; when it is used, the requests of
 # that tier stay on the local model instead of the 429 of the gateway. gitops adds a small Redis in
-# maas-routing for the counters. No RBAC or object of this repo.
-sota_budget_enabled: false
+# maas-routing for the counters. No RBAC or object of this repo. On for the demo.
+sota_budget_enabled: true
 
 nfd_instance_name: nfd-instance
 gpu_cluster_policy_name: gpu-cluster-policy
