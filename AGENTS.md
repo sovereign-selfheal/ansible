@@ -281,7 +281,7 @@ The same contract is in `gitops/AGENTS.md` §2. Keep both in sync.
   `decisionModel.enabled` (`decision_model_enabled`, default `false`), `namespacePolicy.scan`
   (`namespace_policy_scan`, default `true`), `namespacePolicy.hint` (`namespace_policy_hint`, default
   `false`), `namespaces.triageRestricted` (`argocd_seed_restricted_namespace`, default `payments`),
-  `sotaBudget.enabled` (`sota_budget_enabled`, default `false`; router v0.12.0, the SOTA budget per tier
+  `sotaBudget.enabled` (`sota_budget_enabled`, default `true`; router v0.12.0, the SOTA budget per tier
   with a Redis of `gitops`), and,
   only with the decision model and managed GPU nodes, `localModel.profiles.gpu.nodeSelector`
   (`node-role.kubernetes.io/gpu: ""`).
