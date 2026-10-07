@@ -280,7 +280,7 @@ The same contract is in `gitops/AGENTS.md` §2. Keep both in sync.
   `false`: no reasoning), `secretStore.enabled`, `classifier.mode`
   (`classifier_mode`: `local` = the local model classifies, default; `external`; `off`),
   `observability.enabled` (`observability_enabled`, default `true`), `namespaces.observability`,
-  `decisionModel.enabled` (`decision_model_enabled`, default `false`), `namespacePolicy.scan`
+  `decisionModel.enabled` (`decision_model_enabled`, default `gpu_enabled`), `namespacePolicy.scan`
   (`namespace_policy_scan`, default `true`), `namespacePolicy.hint` (`namespace_policy_hint`, default
   `false`), `namespaces.triageRestricted` (`argocd_seed_restricted_namespace`, default `payments`),
   `sotaBudget.enabled` (`sota_budget_enabled`, default `true`; router v0.12.0, the SOTA budget per tier

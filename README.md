@@ -179,12 +179,15 @@ scripts/run-playbook.sh playbooks/site.yml   # hybrid routing with a vault, loca
 # a single operator
 scripts/run-playbook.sh playbooks/10-operators.yml --tags rhoai
 
-# the GPU profile is the default: operators first, then the GPU MachineSets (one run, in this order)
-# CPU profile for quick tests (small model on CPU, no GPU node):
+# the GPU profile is the default: operators first, then the GPU MachineSets (one run, in this order),
+# with the decision model on its own GPU node (see "Decision model")
+# GPU profile without the decision model (only the Qwen GPU node):
+scripts/run-playbook.sh playbooks/site.yml -e decision_model_enabled=false
+# CPU profile for quick tests (small model on CPU, no GPU node, no decision model):
 scripts/run-playbook.sh playbooks/site.yml -e gpu_enabled=false
 
-# end of the day: scale the GPU MachineSets to 0 (only stage 20, faster)
-scripts/run-playbook.sh playbooks/20-prereqs.yml -e gpu_node_prep_replicas=0
+# end of the day: scale the GPU MachineSets of both pools to 0 (only stage 20, faster)
+scripts/run-playbook.sh playbooks/20-prereqs.yml -e gpu_node_prep_replicas=0 -e gpu_node_prep_decision_replicas=0
 ```
 
 A second run must report `changed=0`:
@@ -255,13 +258,17 @@ oc get events -n local-models --sort-by=.lastTimestamp | grep -E 'Pulling|Pulled
 # with the pre-pull the model pod shows: Container image "..." already present on machine
 ```
 
-## Decision model (optional)
+## Decision model
 
-With `-e decision_model_enabled=true` the demo gets a second local model: DiffusionGemma
+With the GPU profile the demo gets a second local model: DiffusionGemma
 26B-A4B FP8-dynamic, served by the vLLM structured-read mode behind the example decision server.
 It answers typed questions (yes/no, multiple choice, score) with a probability from one forward
 pass. The privacy gate of the router uses it as its C2 classifier; the self-heal agents can use it
 to branch. Qwen3.8, its node and its settings do not change.
+
+The switch is `decision_model_enabled`. Its default follows `gpu_enabled`: on with the GPU profile,
+off with the CPU profile. On a new GPU cluster, `-e decision_model_enabled=false` leaves the decision
+model out.
 
 > **Support status:** the decision model runs on an **unsupported preview image**
 > (`registry.redhat.io/rhaii-preview/vllm-cuda-rhel9:diffusiongemma-jev`), for prototypes and
@@ -269,7 +276,7 @@ to branch. Qwen3.8, its node and its settings do not change.
 > Inference Server 3.6 GA and as Technology Preview in 3.7 EA1; 3.7 GA is the path to general
 > availability. Its API is not a vLLM API and may change.
 
-This repo adds, only with the flag:
+This repo adds, only with the decision model:
 
 - the `gpu-decision` GPU pool: one `g6e.2xlarge` (NVIDIA L40S, 48 GB) in the first zone, 200 GiB
   root disk (100 GiB was not enough for the pull of the 27 GB modelcar layer), label `node-role.kubernetes.io/gpu-decision` ([`roles/gpu_node_prep`](roles/gpu_node_prep/README.md));
@@ -278,10 +285,6 @@ This repo adds, only with the flag:
 - the pre-pull of its two images on that node ([`roles/model_prepull`](roles/model_prepull/README.md));
 - `decisionModel.enabled: true` for the gitops seed, and `localModel.profiles.gpu.nodeSelector`
   `node-role.kubernetes.io/gpu` so that Qwen stays on its own node.
-
-```bash
-scripts/run-playbook.sh playbooks/site.yml -e decision_model_enabled=true
-```
 
 Measured on 2026-09-30 (ocp.5bw8q, spike with a hand-made MachineSet of the same shape):
 
