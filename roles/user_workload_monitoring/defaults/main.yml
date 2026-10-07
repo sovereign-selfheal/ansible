@@ -2,8 +2,9 @@
 # user_workload_monitoring: Prometheus for the user namespaces, so that the ServiceMonitors of
 # the gitops repo (router metrics, vLLM metrics) are scraped.
 
-# ConfigMap of the platform monitoring. RHDP may already ship one: the role changes only the key
-# enableUserWorkload of config.yaml and keeps every other setting.
+# ConfigMap of the platform monitoring. RHDP may already ship one: the role sets enableUserWorkload
+# and, when the Alertmanager bridge is on, alertmanagerMain.enableUserAlertmanagerConfig in
+# config.yaml; every other setting is kept.
 user_workload_monitoring_config_namespace: openshift-monitoring
 user_workload_monitoring_config_name: cluster-monitoring-config
 # Namespace where the monitoring operator starts the user workload Prometheus.
@@ -24,3 +25,8 @@ user_workload_monitoring_storage_class: ""
 # Seconds to wait for the user workload Prometheus.
 user_workload_monitoring_timeout: 600
 user_workload_monitoring_poll_delay: 10
+# Platform Alertmanager merges AlertmanagerConfig CRs from user namespaces (the gitops chart
+# ogx-alert-translator declares the webhook route). Needs the KEDA HTTP add-on.
+user_workload_monitoring_alertmanager_bridge_enabled: >-
+  {{ user_workload_monitoring_enabled | default(true) | bool
+     and keda_http_addon_enabled | default(true) | bool }}

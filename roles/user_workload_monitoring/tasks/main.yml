@@ -5,7 +5,8 @@
       enableUserWorkload: true in {{ user_workload_monitoring_config_namespace }}/{{ user_workload_monitoring_config_name }},
       Prometheus retention {{ user_workload_monitoring_retention or 'default' }}, volume
       {{ user_workload_monitoring_storage_size or 'none' }},
-      then wait for Prometheus in {{ user_workload_monitoring_namespace }}
+      then wait for Prometheus in {{ user_workload_monitoring_namespace }}.
+      Alertmanager bridge: enableUserAlertmanagerConfig={{ user_workload_monitoring_alertmanager_bridge_enabled | bool }}
 
 - name: Read the cluster monitoring configuration
   kubernetes.core.k8s_info:
@@ -23,9 +24,25 @@
   ansible.builtin.set_fact:
     user_workload_monitoring_current: "{{ (user_workload_monitoring_raw | from_yaml) or {} }}"
 
-# Write only when the key is missing or false: an unchanged ConfigMap gives changed=0, and the
-# other settings of an existing config.yaml are kept.
-- name: Set enableUserWorkload, keep the other settings
+# Write only when a managed key is missing or false: avoids full-dict compare (YAML shape drift)
+# and keeps changed=0 on re-runs when the cluster config already matches.
+- name: Set user workload and Alertmanager bridge keys in cluster monitoring config
+  vars:
+    user_workload_monitoring_cluster_patch:
+      enableUserWorkload: true
+    user_workload_monitoring_cluster_patch_full: >-
+      {{ user_workload_monitoring_cluster_patch
+         | combine({'alertmanagerMain': {'enableUserAlertmanagerConfig': true}}, recursive=true)
+         if user_workload_monitoring_alertmanager_bridge_enabled | bool
+         else user_workload_monitoring_cluster_patch }}
+    user_workload_monitoring_cluster_wanted: >-
+      {{ user_workload_monitoring_current | combine(user_workload_monitoring_cluster_patch_full, recursive=true) }}
+    user_workload_monitoring_cluster_uwm_needed: >-
+      {{ not (user_workload_monitoring_current.enableUserWorkload | default(false) | bool) }}
+    user_workload_monitoring_cluster_alertmanager_needed: >-
+      {{ user_workload_monitoring_alertmanager_bridge_enabled | bool
+         and not ((user_workload_monitoring_current.alertmanagerMain | default({})).enableUserAlertmanagerConfig
+                  | default(false) | bool) }}
   kubernetes.core.k8s:
     state: present
     definition:
@@ -35,8 +52,10 @@
         name: "{{ user_workload_monitoring_config_name }}"
         namespace: "{{ user_workload_monitoring_config_namespace }}"
       data:
-        config.yaml: "{{ user_workload_monitoring_current | combine({'enableUserWorkload': true}) | to_nice_yaml(indent=2) }}"
-  when: not (user_workload_monitoring_current.enableUserWorkload | default(false) | bool)
+        config.yaml: "{{ user_workload_monitoring_cluster_wanted | to_nice_yaml(indent=2) }}"
+  when: >-
+    user_workload_monitoring_cluster_uwm_needed | bool
+    or user_workload_monitoring_cluster_alertmanager_needed | bool
 
 - name: Read the user workload monitoring configuration
   kubernetes.core.k8s_info:
