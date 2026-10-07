@@ -124,8 +124,10 @@ gpu_node_prep_active_zone_count: 1
 gpu_node_prep_replicas: 1
 # Decision model (DiffusionGemma 26B-A4B FP8-dynamic, vLLM structured-read mode, preview image
 # NOT supported by Red Hat): a second GPU pool (gpu_node_prep_decision_*, one g6e.2xlarge with an
-# NVIDIA L40S), its pre-pull, and decisionModel.enabled for the gitops seed. Off by default.
-decision_model_enabled: false
+# NVIDIA L40S), its pre-pull, and decisionModel.enabled for the gitops seed. On by default with
+# the GPU profile, off with the CPU profile (gpu_enabled false). Turn it off on a GPU cluster with
+# -e decision_model_enabled=false.
+decision_model_enabled: "{{ gpu_enabled }}"
 # Namespace policy of the router (v0.11.0): a request about a namespace labelled
 # sovereign-selfheal.io/data-class=restricted stays on the local model. The seed always creates the
 # labels (agentic-triage: public, payments: restricted) and the RBAC; these switches turn the

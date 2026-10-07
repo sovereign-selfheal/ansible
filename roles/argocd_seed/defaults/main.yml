@@ -98,7 +98,7 @@ argocd_seed_observability_enabled: "{{ observability_enabled | default(true) }}"
 argocd_seed_observability_namespace: "{{ observability_namespace | default('observability') }}"
 # Decision model (gitops component decision-model, value decisionModel.enabled). Always sent,
 # so that turning it off also reaches the root Application.
-argocd_seed_decision_model_enabled: "{{ decision_model_enabled | default(false) }}"
+argocd_seed_decision_model_enabled: "{{ decision_model_enabled | default(gpu_enabled | default(true)) }}"
 # With the decision model there are two GPU pools, and nvidia.com/gpu.present (the default
 # nodeSelector of the local model) matches both. With nodes from gpu_node_prep the local model
 # then selects the node label of its own pool. Sent only with the decision model, so that

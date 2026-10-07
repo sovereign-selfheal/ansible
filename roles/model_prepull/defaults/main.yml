@@ -51,7 +51,7 @@ model_prepull_tolerations:
 # Decision model (decision_model_enabled): its images on the nodes of the gpu-decision pool of
 # roles/gpu_node_prep, in DaemonSets prepull-decision-<key>. They must match decisionModel in
 # gitops/bootstrap/values.yaml. The Qwen images are not pulled there, and these not on Qwen's node.
-model_prepull_decision_enabled: "{{ (decision_model_enabled | default(false) | bool) and model_prepull_profile == 'gpu' }}"
+model_prepull_decision_enabled: "{{ (decision_model_enabled | default(gpu_enabled | default(true)) | bool) and model_prepull_profile == 'gpu' }}"
 model_prepull_decision_images:
   # diffusiongemma-26b-a4b-fp8-3b3dae4 (modelcar repo), resolved on quay.io on 2026-09-30
   modelcar: quay.io/sovereign-selfheal/modelcar-diffusiongemma-26b-a4b-fp8@sha256:b10821319f60a03ec78e6aacf57bedca83e540fd8b0cbcbf3ffc644215e81fc6
