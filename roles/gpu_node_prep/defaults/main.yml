@@ -41,7 +41,7 @@ gpu_node_prep_min_gpu_memory_mib: 90000
 # the vLLM container uses 31 GiB of host memory, and a g6e.xlarge has 32 GiB in total
 # (spike on 2026-09-30). The node label keeps Qwen and the decision model apart; the taint is
 # the same as the gpu pool.
-gpu_node_prep_decision_enabled: "{{ decision_model_enabled | default(false) }}"
+gpu_node_prep_decision_enabled: "{{ decision_model_enabled | default(gpu_enabled | default(true)) }}"
 gpu_node_prep_decision_instance_type: g6e.2xlarge   # 1x NVIDIA L40S 48 GB, 8 vCPU, 64 GiB
 gpu_node_prep_decision_zones: []                    # empty: every worker zone, sorted by name
 gpu_node_prep_decision_active_zone_count: 1

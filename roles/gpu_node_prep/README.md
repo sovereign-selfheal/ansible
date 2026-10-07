@@ -56,7 +56,7 @@ works on a new cluster in a different region without changes.
 | `gpu_node_prep_volume_iops` | `""` | Root disk IOPS; empty keeps the source value (gp3 baseline 3000) |
 | `gpu_node_prep_volume_throughput` | `""` | Root disk throughput in MB/s (gp3 only); empty = gp3 baseline 125 |
 | `gpu_node_prep_min_gpu_memory_mib` | `90000` | Minimum GPU memory of the `gpu` pool (RTX PRO 6000: 97887) |
-| `gpu_node_prep_decision_enabled` | `decision_model_enabled` (`false`) | Add the `gpu-decision` pool |
+| `gpu_node_prep_decision_enabled` | `decision_model_enabled` (default `gpu_enabled`) | Add the `gpu-decision` pool |
 | `gpu_node_prep_decision_instance_type` | `g6e.2xlarge` | One NVIDIA L40S 48 GB, 8 vCPU, 64 GiB. Not `g6e.xlarge`: vLLM uses 31 GiB of host memory after the load |
 | `gpu_node_prep_decision_zones` | `[]` | Zones of the decision pool; empty means every worker zone |
 | `gpu_node_prep_decision_active_zone_count` | `1` | Zones of the decision pool that get machines |
@@ -105,15 +105,16 @@ scripts/run-playbook.sh playbooks/20-prereqs.yml
 # scale the gpu pool to 0 (stops the EC2 costs, keeps the MachineSets)
 scripts/run-playbook.sh playbooks/20-prereqs.yml -e gpu_node_prep_replicas=0
 
-# add the decision pool (one g6e.2xlarge in the first zone)
-scripts/run-playbook.sh playbooks/20-prereqs.yml -e decision_model_enabled=true
+# the decision pool (one g6e.2xlarge in the first zone) comes with the gpu pool, because
+# decision_model_enabled follows gpu_enabled; a new cluster without it:
+scripts/run-playbook.sh playbooks/20-prereqs.yml -e decision_model_enabled=false
 
 # decision pool in a specific zone, for example when the first zone has no g6e capacity
-scripts/run-playbook.sh playbooks/20-prereqs.yml -e decision_model_enabled=true \
+scripts/run-playbook.sh playbooks/20-prereqs.yml \
   -e '{"gpu_node_prep_decision_zones": ["us-east-2a", "us-east-2b", "us-east-2c"]}'
 
 # scale the decision pool to 0
-scripts/run-playbook.sh playbooks/20-prereqs.yml -e decision_model_enabled=true -e gpu_node_prep_decision_replicas=0
+scripts/run-playbook.sh playbooks/20-prereqs.yml -e gpu_node_prep_decision_replicas=0
 
 # GPU in a specific zone, for example when the first zone has no capacity
 scripts/run-playbook.sh playbooks/20-prereqs.yml -e '{"gpu_node_prep_zones": ["us-east-2b", "us-east-2a", "us-east-2c"]}'

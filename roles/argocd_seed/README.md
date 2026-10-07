@@ -49,7 +49,7 @@ in `AGENTS.md` §7.
 | `argocd_seed_classifier_mode` | `classifier_mode` (`local`) | `local`, `external` (needs the vault) or `off` |
 | `argocd_seed_observability_enabled` | `observability_enabled` (`true`) | Tempo and the collector in the gitops repo; needs the observability operators |
 | `argocd_seed_observability_namespace` | `observability` | Namespace of Tempo and the collector |
-| `argocd_seed_decision_model_enabled` | `decision_model_enabled` (`false`) | Value `decisionModel.enabled`: the decision model of the gitops repo |
+| `argocd_seed_decision_model_enabled` | `decision_model_enabled` (default `gpu_enabled`) | Value `decisionModel.enabled`: the decision model of the gitops repo |
 | `argocd_seed_local_model_node_selector` | `node-role.kubernetes.io/gpu` with the decision model and managed GPU nodes, else `{}` | Added to the nodeSelector of the local model; `{}` sends nothing |
 | `argocd_seed_namespace_policy_scan` | `namespace_policy_scan` (`true`) | Value `namespacePolicy.scan`: the router finds namespace names in the request text |
 | `argocd_seed_namespace_policy_hint` | `namespace_policy_hint` (`false`) | Value `namespacePolicy.hint`: the router reads the names that the agents send |
