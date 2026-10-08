@@ -8,7 +8,8 @@
   when: not ansible_check_mode
   vars:
     gpu_node_prep_expected: >-
-      {{ [gpu_node_prep_zone_list | length, gpu_node_prep_pool.active_zone_count | int] | min * (gpu_node_prep_pool.replicas | int) }}
+      {{ [gpu_node_prep_pool_zones[gpu_node_prep_pool.name] | length, gpu_node_prep_pool.active_zone_count | int] | min
+         * (gpu_node_prep_pool.replicas | int) }}
   block:
     # Done when the expected number of machines is Running (0 after a scale-down),
     # or as soon as one machine is Failed (e.g. AWS quota or capacity errors).
@@ -22,10 +23,10 @@
           - "machine.openshift.io/cluster-api-machine-type={{ gpu_node_prep_pool.name }}"
       register: gpu_node_prep_machines
       until: >-
-        (gpu_node_prep_machines.resources | selectattr('status.phase', 'defined')
+        (gpu_node_prep_machines.resources | default([]) | selectattr('status.phase', 'defined')
          | selectattr('status.phase', 'equalto', 'Failed') | list | length > 0)
-        or (gpu_node_prep_machines.resources | length == gpu_node_prep_expected | int
-            and gpu_node_prep_machines.resources | selectattr('status.phase', 'defined')
+        or (gpu_node_prep_machines.resources | default([]) | length == gpu_node_prep_expected | int
+            and gpu_node_prep_machines.resources | default([]) | selectattr('status.phase', 'defined')
                 | selectattr('status.phase', 'equalto', 'Running') | list | length == gpu_node_prep_expected | int)
       retries: "{{ ((gpu_node_prep_timeout | int) / (gpu_node_prep_poll_delay | int)) | round(0, 'ceil') | int }}"
       delay: "{{ gpu_node_prep_poll_delay }}"
@@ -48,13 +49,13 @@
     - name: Assert the GPU machines are Running
       ansible.builtin.assert:
         that:
-          - gpu_node_prep_machines.resources | length == gpu_node_prep_expected | int
+          - gpu_node_prep_machines.resources | default([]) | length == gpu_node_prep_expected | int
           - >-
-            gpu_node_prep_machines.resources | selectattr('status.phase', 'defined')
+            gpu_node_prep_machines.resources | default([]) | selectattr('status.phase', 'defined')
             | selectattr('status.phase', 'equalto', 'Running') | list | length == gpu_node_prep_expected | int
         fail_msg: >-
           Pool {{ gpu_node_prep_pool.name }}: expected {{ gpu_node_prep_expected }} Running GPU machine(s) after {{ gpu_node_prep_timeout }}s, found:
-          {% for m in gpu_node_prep_machines.resources %}{{ m.metadata.name }}={{ m.status.phase | default('n/a') }} {% endfor %}
+          {% for m in gpu_node_prep_machines.resources | default([]) %}{{ m.metadata.name }}={{ m.status.phase | default('n/a') }} {% endfor %}
         success_msg: "Pool {{ gpu_node_prep_pool.name }}: {{ gpu_node_prep_expected }} GPU machine(s) Running"
 
     - name: Wait for the GPU nodes to be Ready
@@ -92,7 +93,7 @@
           {%- endfor -%}
           {{ acc.n }}
       until:
-        - gpu_node_prep_gpu_nodes.resources | length == gpu_node_prep_expected | int
+        - gpu_node_prep_gpu_nodes.resources | default([]) | length == gpu_node_prep_expected | int
         - gpu_node_prep_with_gpu | int == gpu_node_prep_expected | int
       retries: "{{ ((gpu_node_prep_gpu_timeout | int) / (gpu_node_prep_poll_delay | int)) | round(0, 'ceil') | int }}"
       delay: "{{ gpu_node_prep_poll_delay }}"

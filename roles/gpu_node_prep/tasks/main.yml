@@ -30,7 +30,7 @@
     name: "{{ gpu_node_prep_cluster_policy_name }}"
   register: gpu_node_prep_cluster_policy
   until:
-    - gpu_node_prep_cluster_policy.resources | length == 1
+    - gpu_node_prep_cluster_policy.resources | default([]) | length == 1
     - (gpu_node_prep_cluster_policy.resources | first).status.state | default('') == 'ready'
   retries: "{{ ((gpu_node_prep_gpu_timeout | int) / (gpu_node_prep_poll_delay | int)) | round(0, 'ceil') | int }}"
   delay: "{{ gpu_node_prep_poll_delay }}"
