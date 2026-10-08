@@ -1,0 +1,74 @@
+---
+- name: Install the triage-agent-operator
+  ansible.builtin.debug:
+    msg: >-
+      enabled={{ triage_agent_operator_enabled }},
+      namespace={{ triage_agent_operator_namespace }},
+      image={{ triage_agent_operator_image }},
+      replicas={{ triage_agent_operator_replicas }}
+
+- name: Ensure the operator namespace
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ triage_agent_operator_namespace }}"
+        labels:
+          openshift.io/cluster-monitoring: "true"
+  when: triage_agent_operator_enabled | bool
+
+- name: Install the TriageAgent CRD
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ lookup('ansible.builtin.file', role_path + '/files/crd.yaml') | ansible.builtin.from_yaml }}"
+  when: triage_agent_operator_enabled | bool
+
+- name: Ensure the operator ClusterRole
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ lookup('ansible.builtin.template', 'clusterrole.yaml.j2') | ansible.builtin.from_yaml }}"
+  when: triage_agent_operator_enabled | bool
+
+- name: Ensure the operator ClusterRoleBinding
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ lookup('ansible.builtin.template', 'clusterrolebinding.yaml.j2') | ansible.builtin.from_yaml }}"
+  when: triage_agent_operator_enabled | bool
+
+- name: Ensure the operator ServiceAccount
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: "{{ triage_agent_operator_name }}"
+        namespace: "{{ triage_agent_operator_namespace }}"
+        labels:
+          app: "{{ triage_agent_operator_name }}"
+  when: triage_agent_operator_enabled | bool
+
+- name: Ensure the operator Deployment
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ lookup('ansible.builtin.template', 'deployment.yaml.j2') | ansible.builtin.from_yaml }}"
+  when: triage_agent_operator_enabled | bool
+
+- name: Wait until the operator Deployment is available
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    name: "{{ triage_agent_operator_name }}"
+    namespace: "{{ triage_agent_operator_namespace }}"
+  register: triage_agent_operator_deploy
+  until:
+    - triage_agent_operator_deploy.resources | length == 1
+    - (triage_agent_operator_deploy.resources | first).status.availableReplicas | default(0) | int >= 1
+  retries: "{{ triage_agent_operator_wait_retries }}"
+  delay: "{{ triage_agent_operator_wait_delay }}"
+  when:
+    - triage_agent_operator_enabled | bool
+    - triage_agent_operator_wait | bool
+    - not ansible_check_mode

@@ -1,0 +1,27 @@
+---
+# triage-agent-operator (github.com/sovereign-selfheal/triage-agent-operator): reconciles
+# TriageAgent CRs (triage.sovereign-selfheal.io/v1alpha1) that gitops deploys via
+# components/triage-agent-operator-cr. The CRD in files/crd.yaml is a copy of
+# triage-agent-operator/deploy/crd.yaml (refresh with scripts/sync-triage-agent-operator-crd.sh).
+
+triage_agent_operator_enabled: true
+triage_agent_operator_namespace: triage-agent-operator
+triage_agent_operator_name: triage-agent-operator
+
+# Pin by digest (same convention as roles/model_prepull and gitops image pins).
+# tag 7aa6580 on quay.io/sovereign-selfheal/triage-agent-operator, resolved 2026-10-08
+triage_agent_operator_image: quay.io/sovereign-selfheal/triage-agent-operator@sha256:bdfd92e73f2efc6c3a2ac411ad6f3557d9868398ed33506bc64f3f606ce4593e
+triage_agent_operator_replicas: 1
+triage_agent_operator_log_level: INFO
+
+triage_agent_operator_resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+triage_agent_operator_wait: true
+triage_agent_operator_wait_retries: 30
+triage_agent_operator_wait_delay: 10

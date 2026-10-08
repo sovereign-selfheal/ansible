@@ -1,0 +1,34 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ triage_agent_operator_name }}
+  labels:
+    app: {{ triage_agent_operator_name }}
+rules:
+  # TriageAgent CR and status (cluster-wide watch, reconcile in the CR's namespace).
+  - apiGroups: [triage.sovereign-selfheal.io]
+    resources: [triageagents]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [triage.sovereign-selfheal.io]
+    resources: [triageagents/status]
+    verbs: [get, update, patch]
+  - apiGroups: [triage.sovereign-selfheal.io]
+    resources: [triageagents/finalizers]
+    verbs: [update]
+  # Child resources the operator creates per CR (any demo namespace).
+  - apiGroups: [""]
+    resources: [serviceaccounts, configmaps, secrets, services]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [route.openshift.io]
+    resources: [routes]
+    verbs: [get, list, watch, create, update, patch, delete]
+  # kopf: events and leader election.
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [create, patch]
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [get, list, watch, create, update, patch, delete]

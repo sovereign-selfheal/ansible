@@ -56,6 +56,7 @@ Target platform: **demo.redhat.com** (RHDP). The code must be structured so that
 │   ├── ingress_gateway/        # RHOAI inference Gateway + passthrough Route (contract with gitops); after the seed: Kuadrant wasm check
 │   ├── secrets_bootstrap/      # secret values for ESO + ClusterSecretStore (provider kubernetes)
 │   ├── user_workload_monitoring/  # enableUserWorkload + Prometheus retention and volume (merged, idempotent)
+│   ├── triage_agent_operator/  # TriageAgent CRD + triage-agent-operator Deployment (gitops TriageAgent CRs)
 │   ├── console_links/          # console menu links to the router traces (ConsoleLink, cluster-scoped)
 │   ├── team_access/            # team users in Keycloak (installed when missing), Group + cluster role
 │   └── argocd_seed/
@@ -258,7 +259,13 @@ The same contract is in `gitops/AGENTS.md` §2. Keep both in sync.
   pre-pull DaemonSets (namespace `sovereign-selfheal-prepull`), the Argo CD settings, the root Application,
   the observability operators (OpenTelemetry, Tempo, Cluster Observability), the `UIPlugin`s
   `distributed-tracing` and `monitoring` (Perses), the Tempo tenant write permission (ClusterRole + ClusterRoleBinding
-  `tempo-traces-write-<tenant>`), the ClusterRoleBinding `prometheus-mcp-server-sa-cluster-monitoring-view`,
+  `tempo-traces-write-<tenant>`),   the ClusterRoleBinding `prometheus-mcp-server-sa-cluster-monitoring-view`,
+  the ClusterRoleBinding `ocp-mcp-server-sa-view` (built-in `view` ClusterRole, ServiceAccount
+  `ocp-mcp-server-sa` of `agentic-triage`, gitops component `ocp-mcp-server`),
+  the `TriageAgent` CRD (`triageagents.triage.sovereign-selfheal.io`, copy of
+  `triage-agent-operator/deploy/crd.yaml`), the triage-agent-operator controller (namespace
+  `triage-agent-operator`, `ClusterRole`/`ClusterRoleBinding` `triage-agent-operator`), and the
+  Argo CD health check for `TriageAgent` CRs (gitops `components/triage-agent-operator-cr`),
   the ClusterRole `sovereign-selfheal-namespace-reader` (get/list/watch namespaces) and its bindings
   `litellm-namespace-reader` and `routing-live-view-namespace-reader` (ServiceAccounts `litellm` and
   `routing-live-view` of `maas-routing`), the ClusterRole `sovereign-selfheal-demo-namespace-labeler`

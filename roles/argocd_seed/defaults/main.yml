@@ -121,6 +121,7 @@ argocd_seed_extra_values: {}
 # ExternalSecret and OpenTelemetryCollector). They replace spec.resourceHealthChecks of the instance.
 # Must match gitops MCPServer CRs (mcp.x-k8s.io/v1alpha1); see gitops/components/*/templates/mcpserver.yaml
 argocd_seed_mcpserver_api_group: mcp.x-k8s.io
+argocd_seed_triage_agent_api_group: triage.sovereign-selfheal.io
 argocd_seed_health_checks:
   - group: argoproj.io
     kind: Application
@@ -139,6 +140,10 @@ argocd_seed_health_checks:
   - group: "{{ argocd_seed_mcpserver_api_group }}"
     kind: MCPServer
     file: health-mcpserver.lua
+  # triage-agent-operator: Healthy when status.phase is Running (gitops TriageAgent CRs).
+  - group: "{{ argocd_seed_triage_agent_api_group }}"
+    kind: TriageAgent
+    file: health-triageagent.lua
 
 # OpenShift Groups that are admin in the Argo CD UI (Dex passes the OpenShift groups to Argo CD).
 # One line `g, <group>, role:admin` per group is added to spec.rbac.policy; the lines already

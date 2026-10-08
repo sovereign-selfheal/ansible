@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ triage_agent_operator_name }}
+  namespace: {{ triage_agent_operator_namespace }}
+  labels:
+    app: {{ triage_agent_operator_name }}
+spec:
+  replicas: {{ triage_agent_operator_replicas }}
+  selector:
+    matchLabels:
+      app: {{ triage_agent_operator_name }}
+  template:
+    metadata:
+      labels:
+        app: {{ triage_agent_operator_name }}
+    spec:
+      serviceAccountName: {{ triage_agent_operator_name }}
+      containers:
+        - name: operator
+          image: {{ triage_agent_operator_image }}
+          imagePullPolicy: IfNotPresent
+          command:
+            - kopf
+            - run
+            - --all-namespaces
+            - -m
+            - app.operator
+          env:
+            - name: LOG_LEVEL
+              value: {{ triage_agent_operator_log_level | quote }}
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          resources: {{ triage_agent_operator_resources | to_json }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
