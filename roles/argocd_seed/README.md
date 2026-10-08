@@ -17,8 +17,9 @@ in `AGENTS.md` §7.
 3. Creates cluster-level RBAC prerequisites for gitops components: the ClusterRoles of
    `argocd_seed_cluster_roles` (`sovereign-selfheal-namespace-reader`,
    `sovereign-selfheal-demo-namespace-labeler`) and the ClusterRoleBindings of
-   `argocd_seed_cluster_role_bindings` (`prometheus-mcp-server-sa-cluster-monitoring-view`, and the
-   namespace reader and labeler bindings of the `litellm` and `routing-live-view` ServiceAccounts).
+   `argocd_seed_cluster_role_bindings` (`prometheus-mcp-server-sa-cluster-monitoring-view`,
+   `ocp-mcp-server-sa-view`, and the namespace reader and labeler bindings of the `litellm` and
+   `routing-live-view` ServiceAccounts).
 4. Sets custom health checks on the ArgoCD CR: `Application` (so that the sync waves of the app
    of apps wait for each component), `AuthPolicy` and `TokenRateLimitPolicy` (Healthy when
    `Enforced`), `TempoMonolithic` (Healthy when `Ready`) and `MCPServer` (Healthy when `Ready`).
@@ -58,7 +59,7 @@ in `AGENTS.md` §7.
 | `argocd_seed_extra_values` | `{}` | Other values of `bootstrap/values.yaml` |
 | `argocd_seed_namespaces` | `local-models`, `maas-routing`, `agentic-triage`, `payments`, `observability` | Namespaces and labels (managed-by, data-class) |
 | `argocd_seed_cluster_roles` | `sovereign-selfheal-namespace-reader`, `sovereign-selfheal-demo-namespace-labeler` | ClusterRoles for gitops components (the gitops AppProject allows no cluster-scoped objects) |
-| `argocd_seed_cluster_role_bindings` | `prometheus-mcp-server-sa-cluster-monitoring-view`, the namespace reader and labeler bindings | ClusterRoleBindings required by gitops components |
+| `argocd_seed_cluster_role_bindings` | `prometheus-mcp-server-sa-cluster-monitoring-view`, `ocp-mcp-server-sa-view`, the namespace reader and labeler bindings | ClusterRoleBindings required by gitops components |
 | `argocd_seed_mcpserver_api_group` | `mcp.x-k8s.io` | API group used by the MCPServer Argo CD health check (MCP Lifecycle Operator CRDs) |
 | `argocd_seed_health_checks` | Application, AuthPolicy, TokenRateLimitPolicy, TempoMonolithic, MCPServer | Lua files in `files/` |
 | `argocd_seed_admin_groups` | `[selfheal-team]` when `team_users` is set, else `[]` | OpenShift Groups made admin in the Argo CD UI: one `g, <group>, role:admin` line each, appended to `spec.rbac.policy` (existing lines are kept) |
