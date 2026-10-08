@@ -53,6 +53,8 @@ observability_collector_service_account: otel-collector
 # User workload monitoring (roles/user_workload_monitoring): Prometheus scrapes the
 # ServiceMonitors of the demo namespaces (router metrics, vLLM metrics).
 user_workload_monitoring_enabled: true
+# Alertmanager -> KEDA interceptor -> ogx-alert-translator (gitops AlertmanagerConfig).
+user_workload_monitoring_alertmanager_bridge_enabled: "{{ user_workload_monitoring_enabled | bool and keda_http_addon_enabled | bool }}"
 
 # ----- KEDA (Custom Metrics Autoscaler, roles/olm_operator) ---------------------------
 # Prerequisite for gitops workloads that use ScaledObject / HTTPScaledObject. The HTTP add-on

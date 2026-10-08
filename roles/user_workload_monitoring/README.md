@@ -9,8 +9,11 @@ in the gitops repo.
 
 1. Reads the ConfigMap `cluster-monitoring-config` in `openshift-monitoring`. RHDP may ship one, or
    none (none on OCP 4.22.14, RHDP, 2026-09-26).
-2. Sets `enableUserWorkload: true` in its `config.yaml` and keeps every other setting. It writes the
-   ConfigMap only when the key is missing or false, so the second run reports no change.
+2. Sets `enableUserWorkload: true` in its `config.yaml` and keeps every other setting. When
+   `user_workload_monitoring_alertmanager_bridge_enabled` is true (default with user workload monitoring and the KEDA
+   HTTP add-on), it also sets `alertmanagerMain.enableUserAlertmanagerConfig: true` so platform
+   Alertmanager merges the `AlertmanagerConfig` of `gitops/components/ogx-alert-translator`. It writes
+   the ConfigMap only when a value differs, so the second run reports no change.
 3. Sets the retention and a volume of the user workload Prometheus in the ConfigMap
    `user-workload-monitoring-config` (namespace `openshift-user-workload-monitoring`), key
    `prometheus`: `retention`, `retentionSize` and a `volumeClaimTemplate` (one PVC per replica). Other
@@ -33,6 +36,7 @@ in the gitops repo.
 | `user_workload_monitoring_storage_class` | `""` | Empty = the default StorageClass (gp3-csi on AWS) |
 | `user_workload_monitoring_timeout` | `600` | Seconds to wait for Prometheus |
 | `user_workload_monitoring_poll_delay` | `10` | Poll interval |
+| `user_workload_monitoring_alertmanager_bridge_enabled` | UWM and `keda_http_addon_enabled` both on | Set `alertmanagerMain.enableUserAlertmanagerConfig` for the triage webhook |
 
 The playbook runs the role when `user_workload_monitoring_enabled` is `true` (default in
 `group_vars/all/main.yml`).

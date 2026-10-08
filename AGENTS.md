@@ -265,7 +265,9 @@ The same contract is in `gitops/AGENTS.md` §2. Keep both in sync.
   the console menu links to the router traces (`ConsoleLink`
   `sovereign-traces-*`), the namespace `observability`, user workload monitoring
   (`enableUserWorkload` in `cluster-monitoring-config`; retention and volume of the user workload
-  Prometheus in `user-workload-monitoring-config`), team access when `team_users` is set (Keycloak
+  Prometheus in `user-workload-monitoring-config`; with the KEDA HTTP add-on,
+  `alertmanagerMain.enableUserAlertmanagerConfig` so platform Alertmanager merges the
+  `AlertmanagerConfig` of `gitops/components/ogx-alert-translator`), team access when `team_users` is set (Keycloak
   in the namespace `keycloak` when this repo installs it: PostgreSQL, `Keycloak` CR, Route; realm, client,
   users; the OAuth IdP; `Group/selfheal-team` and its ClusterRoleBinding; the Argo CD RBAC line of that Group).
   `gitops`: every object inside `local-models`, `maas-routing`, `agentic-triage`, `payments` and `observability`.
