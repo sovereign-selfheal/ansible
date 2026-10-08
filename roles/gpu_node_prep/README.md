@@ -24,10 +24,13 @@ apart: each model selects the label of its own pool.
    If a machine goes to `Failed` (for example, AWS quota), the play stops and shows the AWS
    error message. A machine without capacity in the zone stays `Provisioning` instead: the wait
    then runs until its timeout (see "Notes").
-5. For each pool, waits until every node exposes `nvidia.com/gpu`, that is, the NVIDIA driver
-   is built and the device plugin runs, and checks the GPU memory (GFD label
-   `nvidia.com/gpu.memory`) against the minimum of the pool. This step needs the GPU operator,
-   so the waits run in stage 20, after the operators (stage 10).
+5. For each pool, waits until every node exposes `nvidia.com/gpu` (the NVIDIA driver is built and
+   the device plugin runs) and every node carries the GFD label `nvidia.com/gpu.memory`. The label
+   can come about a minute after `nvidia.com/gpu` (2026-10-08). A pool with
+   `min_gpu_memory_mib: 0` does not wait for the label. Then it checks the GPU memory against the
+   minimum of the pool. On a failure the message names the nodes without `nvidia.com/gpu`, without
+   the label, or with too little memory. This step needs the GPU operator, so the waits run in
+   stage 20, after the operators (stage 10).
 6. Waits until the NVIDIA `ClusterPolicy` is `ready`. After a new node joins, the metrics
    components (`dcgm`, `dcgm-exporter`) need about one more minute. When the play ends, the
    GPU stack is fully ready.
@@ -67,8 +70,8 @@ works on a new cluster in a different region without changes.
 | `gpu_node_prep_pools` | built from the variables above | The pools; override only to add a pool of your own |
 | `gpu_node_prep_wait` | `true` | `false`: create or scale the MachineSets and return (steps 1-3) |
 | `gpu_node_prep_timeout` | `1500` | Seconds to wait for the machines |
-| `gpu_node_prep_wait_gpu_allocatable` | `true` | Wait until the nodes expose `nvidia.com/gpu` |
-| `gpu_node_prep_gpu_timeout` | `1500` | Seconds to wait for `nvidia.com/gpu`, and then for the ClusterPolicy |
+| `gpu_node_prep_wait_gpu_allocatable` | `true` | Wait until the nodes expose `nvidia.com/gpu` and the label `nvidia.com/gpu.memory`, then check the GPU memory |
+| `gpu_node_prep_gpu_timeout` | `1500` | Seconds to wait for `nvidia.com/gpu` and the memory label, and then for the ClusterPolicy |
 | `gpu_node_prep_wait_cluster_policy` | `true` | Wait until the ClusterPolicy is `ready` |
 | `gpu_node_prep_cluster_policy_name` | `gpu_cluster_policy_name` or `gpu-cluster-policy` | ClusterPolicy to check |
 | `gpu_node_prep_poll_delay` | `15` | Poll interval in seconds |
