@@ -67,6 +67,13 @@ argocd_seed_cluster_role_bindings:
     namespace: agentic-triage
     service_account: prometheus-mcp-server-sa
     cluster_role: cluster-monitoring-view
+  # Kubernetes-API MCP server (gitops component ocp-mcp-server, upstream kubernetes-mcp-server
+  # project): read-only pods/logs/events/generic-resource tools for the triage agent. The
+  # built-in `view` ClusterRole, cluster-wide (the server itself runs read-only: --read-only).
+  - name: ocp-mcp-server-sa-view
+    namespace: agentic-triage
+    service_account: ocp-mcp-server-sa
+    cluster_role: view
   - name: litellm-namespace-reader
     namespace: maas-routing
     service_account: litellm
