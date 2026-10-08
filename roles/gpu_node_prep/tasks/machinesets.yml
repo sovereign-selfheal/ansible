@@ -9,6 +9,12 @@
       {{ gpu_node_prep_pool.zones if gpu_node_prep_pool.zones | default([], true) | length > 0
          else (gpu_node_prep_sources.keys() | sort) }}
 
+# tasks/wait.yml reads the zones of each pool from this dict: gpu_node_prep_zone_list is one host
+# fact, and after the loop over the pools it holds the zones of the last pool only.
+- name: Remember the zones of the pool for the wait
+  ansible.builtin.set_fact:
+    gpu_node_prep_pool_zones: "{{ gpu_node_prep_pool_zones | default({}) | combine({gpu_node_prep_pool.name: gpu_node_prep_zone_list}) }}"
+
 - name: Assert every zone has a worker MachineSet to clone
   ansible.builtin.assert:
     that:

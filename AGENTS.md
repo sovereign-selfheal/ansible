@@ -163,7 +163,8 @@ On re-runs the role must detect that the pinned CSV is already `Succeeded` and s
 (stage 05, `roles/gpu_node_prep` with `gpu_node_prep_wait: false`), so AWS builds the node while
 stage 10 installs the operators; stage 05 also starts the pre-pull of the model images
 (`roles/model_prepull`). Stage 20 runs `gpu_node_prep` again with the waits: machines Running,
-nodes Ready, `nvidia.com/gpu` allocatable, ClusterPolicy `ready`. This is the sync point of the node
+nodes Ready, `nvidia.com/gpu` allocatable with the GFD label `nvidia.com/gpu.memory` (it can come
+about a minute later), ClusterPolicy `ready`. This is the sync point of the node
 and the operators; the waits need the GPU operator, so they stay after stage 10. Because the node
 already exists in stage 10, the ClusterPolicy wait of the `gpu_operator` entry includes the driver
 build (about 6-11 minutes, timeout 1800 s). The ClusterPolicy is also `ready` with no GPU nodes

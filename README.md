@@ -210,8 +210,9 @@ aim to shorten this; the gain on a new cluster is not measured yet (see the limi
 
 - **The GPU node starts in parallel with the operators.** `05-early-nodes.yml` creates the GPU
   MachineSets without waiting, so AWS builds the node while `10-operators.yml` runs.
-  `20-prereqs.yml` then waits for the node (Running, Ready, `nvidia.com/gpu`, ClusterPolicy
-  `ready`): this is the sync point of the two. Since the node exists during stage 10, the
+  `20-prereqs.yml` then waits for the node (Running, Ready, `nvidia.com/gpu` with the GFD label
+  `nvidia.com/gpu.memory`, ClusterPolicy `ready`): this is the sync point of the two. The label can
+  come about a minute after `nvidia.com/gpu` (2026-10-08). Since the node exists during stage 10, the
   ClusterPolicy wait of the GPU operator now includes the driver build (about 6-11 minutes,
   within its 1800 s timeout).
 - **The model images are pulled early and in parallel.** `05-early-nodes.yml` also creates one
