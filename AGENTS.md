@@ -259,6 +259,8 @@ The same contract is in `gitops/AGENTS.md` §2. Keep both in sync.
   the observability operators (OpenTelemetry, Tempo, Cluster Observability), the `UIPlugin`s
   `distributed-tracing` and `monitoring` (Perses), the Tempo tenant write permission (ClusterRole + ClusterRoleBinding
   `tempo-traces-write-<tenant>`), the ClusterRoleBinding `prometheus-mcp-server-sa-cluster-monitoring-view`,
+  the ClusterRoleBinding `ocp-mcp-server-sa-view` (built-in `view` ClusterRole, ServiceAccount
+  `ocp-mcp-server-sa` of `agentic-triage`, gitops component `ocp-mcp-server`),
   the ClusterRole `sovereign-selfheal-namespace-reader` (get/list/watch namespaces) and its bindings
   `litellm-namespace-reader` and `routing-live-view-namespace-reader` (ServiceAccounts `litellm` and
   `routing-live-view` of `maas-routing`), the ClusterRole `sovereign-selfheal-demo-namespace-labeler`
