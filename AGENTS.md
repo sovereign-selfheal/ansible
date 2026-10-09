@@ -259,7 +259,7 @@ The same contract is in `gitops/AGENTS.md` §2. Keep both in sync.
   pre-pull DaemonSets (namespace `sovereign-selfheal-prepull`), the Argo CD settings, the root Application,
   the observability operators (OpenTelemetry, Tempo, Cluster Observability), the `UIPlugin`s
   `distributed-tracing` and `monitoring` (Perses), the Tempo tenant write permission (ClusterRole + ClusterRoleBinding
-  `tempo-traces-write-<tenant>`),   the ClusterRoleBinding `prometheus-mcp-server-sa-cluster-monitoring-view`,
+  `tempo-traces-write-<tenant>`), the ClusterRoleBinding `prometheus-mcp-server-sa-cluster-monitoring-view`,
   the ClusterRoleBinding `ocp-mcp-server-sa-view` (built-in `view` ClusterRole, ServiceAccount
   `ocp-mcp-server-sa` of `agentic-triage`, gitops component `ocp-mcp-server`),
   the `TriageAgent` CRD (`triageagents.triage.sovereign-selfheal.io`, copy of
@@ -292,7 +292,8 @@ The same contract is in `gitops/AGENTS.md` §2. Keep both in sync.
   (`namespace_policy_scan`, default `true`), `namespacePolicy.hint` (`namespace_policy_hint`, default
   `false`), `namespaces.triageRestricted` (`argocd_seed_restricted_namespace`, default `payments`),
   `sotaBudget.enabled` (`sota_budget_enabled`, default `true`; router v0.12.0, the SOTA budget per tier
-  with a Redis of `gitops`), and,
+  with a Redis of `gitops`), `triageAgentOperator.enabled` (`triage_agent_operator_enabled`, default
+  `true`: the TriageAgent CRD and the operator are installed, so `gitops` may render `TriageAgent` CRs), and,
   only with the decision model and managed GPU nodes, `localModel.profiles.gpu.nodeSelector`
   (`node-role.kubernetes.io/gpu: ""`).
 - **Namespace policy** (router v0.11.0): this repo owns the data-class labels and the RBAC that lets the
@@ -316,7 +317,8 @@ The same contract is in `gitops/AGENTS.md` §2. Keep both in sync.
   **local-only mode** (`sota.enabled: false`, every request goes to the local model); some = error.
 - **Argo CD health checks** on the ArgoCD CR: `argoproj.io/Application` (sync waves between components),
   `serving.kserve.io/InferenceService`, Kuadrant `AuthPolicy` and `TokenRateLimitPolicy`, Tempo
-  `TempoMonolithic` and MCP lifecycle `MCPServer` (`mcp.x-k8s.io`; Argo CD 3.4 already knows `OpenTelemetryCollector`).
+  `TempoMonolithic`, MCP lifecycle `MCPServer` (`mcp.x-k8s.io`) and `triage.sovereign-selfheal.io/TriageAgent`
+  (Healthy when `status.phase` is `Running`; Argo CD 3.4 already knows `OpenTelemetryCollector`).
 - **Secrets** are managed by the External Secrets Operator. `roles/secrets_bootstrap` lands the values from
   `vault.yml` (or AgnosticV) in Secrets of the namespace `sovereign-selfheal-secrets` and creates the
   `ClusterSecretStore` `sovereign-selfheal` (provider `kubernetes`) that ESO reads. A different backend later
@@ -341,6 +343,13 @@ Second exception: Keycloak with its PostgreSQL in `roles/team_access`, only on c
 (RHDP already has it). It is the identity provider of the cluster, an auth prerequisite: people log in
 to the console and to Argo CD through it, so it must exist before Argo CD is used, and its users come
 from the vault.
+
+Third exception: the triage-agent-operator in `roles/triage_agent_operator` (namespace
+`triage-agent-operator`, ServiceAccount, Deployment, `ClusterRole`/`ClusterRoleBinding` and the
+`TriageAgent` CRD). It is a cluster-scoped controller, not a demo workload: the gitops AppProject allows
+no CRDs and no cluster RBAC, and the CRD and the operator must exist before Argo CD syncs the
+`TriageAgent` CRs of `gitops/components/triage-agent-operator-cr`. The agents themselves stay in
+`gitops`: the CRs are there, and the operator creates their objects in the demo namespaces.
 
 ## 9. When in doubt
 
