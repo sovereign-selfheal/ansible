@@ -3,16 +3,20 @@
 # TriageAgent CRs (triage.sovereign-selfheal.io/v1alpha1) that gitops deploys via
 # components/triage-agent-operator-cr. The CRD in files/crd.yaml is a copy of
 # triage-agent-operator/deploy/crd.yaml (refresh with scripts/sync-triage-agent-operator-crd.sh).
+# The switch triage_agent_operator_enabled is in group_vars/all/main.yml (playbooks/20-prereqs.yml
+# runs the role only when it is true; roles/argocd_seed sends it to gitops).
 
-triage_agent_operator_enabled: true
 triage_agent_operator_namespace: triage-agent-operator
 triage_agent_operator_name: triage-agent-operator
 
 # Pin by digest (same convention as roles/model_prepull and gitops image pins).
 # tag 7aa6580 on quay.io/sovereign-selfheal/triage-agent-operator, resolved 2026-10-08
 triage_agent_operator_image: quay.io/sovereign-selfheal/triage-agent-operator@sha256:bdfd92e73f2efc6c3a2ac411ad6f3557d9868398ed33506bc64f3f606ce4593e
-triage_agent_operator_replicas: 1
+
+# Log level of kopf: INFO (default), DEBUG (kopf --verbose) or WARNING (kopf --quiet).
 triage_agent_operator_log_level: INFO
+# kopf liveness endpoint (kopf run --liveness), used by the liveness and readiness probes.
+triage_agent_operator_health_port: 8080
 
 triage_agent_operator_resources:
   requests:
