@@ -9,8 +9,12 @@ triage_agent_operator_namespace: triage-agent-operator
 triage_agent_operator_name: triage-agent-operator
 
 # Pin by digest (same convention as roles/model_prepull and gitops image pins).
-# tag 7aa6580 on quay.io/sovereign-selfheal/triage-agent-operator, resolved 2026-10-08
-triage_agent_operator_image: quay.io/sovereign-selfheal/triage-agent-operator@sha256:bdfd92e73f2efc6c3a2ac411ad6f3557d9868398ed33506bc64f3f606ce4593e
+# tag 9101ef2 on quay.io/sovereign-selfheal/triage-agent-operator, resolved 2026-10-09.
+# Fixes the two crash-level bugs amedeos found in ansible#20 (ModuleNotFoundError at
+# start, missing DynamicClient.apply) plus the latent status/replicas/LOG_LEVEL/knowledge
+# mount issues; see triage-agent-operator v0.3.0 and
+# https://github.com/sovereign-selfheal/ansible/pull/20#issuecomment-6077889987
+triage_agent_operator_image: quay.io/sovereign-selfheal/triage-agent-operator@sha256:c4181ea70b0211b7f5fd5d55edb688f188ab06cd8bbc40fb066a8df62b301d2f
 triage_agent_operator_replicas: 1
 triage_agent_operator_log_level: INFO
 
