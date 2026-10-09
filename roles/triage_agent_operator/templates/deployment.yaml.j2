@@ -38,6 +38,10 @@ spec:
             - -m
             - app.operator
           env:
+            # The `kopf` console script does not put the working directory (/app, the WORKDIR of
+            # the image) on sys.path, so `-m app.operator` fails with "No module named 'app'".
+            - name: PYTHONPATH
+              value: /app
             - name: PYTHONUNBUFFERED
               value: "1"
           ports:
