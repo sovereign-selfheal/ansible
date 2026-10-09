@@ -121,6 +121,10 @@ argocd_seed_namespace_policy_scan: "{{ namespace_policy_scan | default(true) }}"
 argocd_seed_namespace_policy_hint: "{{ namespace_policy_hint | default(false) }}"
 # SOTA budget per tier of the router (gitops sotaBudget.enabled). Always sent, like the switches above.
 argocd_seed_sota_budget_enabled: "{{ sota_budget_enabled | default(true) }}"
+# triage-agent-operator (gitops triageAgentOperator.enabled): true only when roles/triage_agent_operator
+# installed the TriageAgent CRD and the operator. gitops renders TriageAgent CRs only then. Always sent,
+# like the switches above.
+argocd_seed_triage_agent_operator_enabled: "{{ triage_agent_operator_enabled | default(true) }}"
 # Any other value of bootstrap/values.yaml, merged last (for example {tiers: [...]}).
 argocd_seed_extra_values: {}
 
@@ -128,7 +132,6 @@ argocd_seed_extra_values: {}
 # ExternalSecret and OpenTelemetryCollector). They replace spec.resourceHealthChecks of the instance.
 # Must match gitops MCPServer CRs (mcp.x-k8s.io/v1alpha1); see gitops/components/*/templates/mcpserver.yaml
 argocd_seed_mcpserver_api_group: mcp.x-k8s.io
-argocd_seed_triage_agent_api_group: triage.sovereign-selfheal.io
 argocd_seed_health_checks:
   - group: argoproj.io
     kind: Application
@@ -147,8 +150,9 @@ argocd_seed_health_checks:
   - group: "{{ argocd_seed_mcpserver_api_group }}"
     kind: MCPServer
     file: health-mcpserver.lua
-  # triage-agent-operator: Healthy when status.phase is Running (gitops TriageAgent CRs).
-  - group: "{{ argocd_seed_triage_agent_api_group }}"
+  # triage-agent-operator: Healthy when status.phase is Running (gitops TriageAgent CRs). The
+  # group is fixed by the CRD copy in roles/triage_agent_operator/files/crd.yaml.
+  - group: triage.sovereign-selfheal.io
     kind: TriageAgent
     file: health-triageagent.lua
 

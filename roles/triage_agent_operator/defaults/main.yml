@@ -3,20 +3,23 @@
 # TriageAgent CRs (triage.sovereign-selfheal.io/v1alpha1) that gitops deploys via
 # components/triage-agent-operator-cr. The CRD in files/crd.yaml is a copy of
 # triage-agent-operator/deploy/crd.yaml (refresh with scripts/sync-triage-agent-operator-crd.sh).
+# The switch triage_agent_operator_enabled is in group_vars/all/main.yml (playbooks/20-prereqs.yml
+# runs the role only when it is true; roles/argocd_seed sends it to gitops).
 
-triage_agent_operator_enabled: true
 triage_agent_operator_namespace: triage-agent-operator
 triage_agent_operator_name: triage-agent-operator
 
 # Pin by digest (same convention as roles/model_prepull and gitops image pins).
-# tag 9101ef2 on quay.io/sovereign-selfheal/triage-agent-operator, resolved 2026-10-09.
-# Fixes the two crash-level bugs amedeos found in ansible#20 (ModuleNotFoundError at
-# start, missing DynamicClient.apply) plus the latent status/replicas/LOG_LEVEL/knowledge
-# mount issues; see triage-agent-operator v0.3.0 and
-# https://github.com/sovereign-selfheal/ansible/pull/20#issuecomment-6077889987
+# tag 9101ef2 (v0.3.0) on quay.io/sovereign-selfheal/triage-agent-operator, resolved 2026-10-09.
+# Fixes the blocking bugs of the ansible#20 review: ModuleNotFoundError at start, missing
+# DynamicClient.apply, status never refreshed, replicas default, LOG_LEVEL, knowledge mount.
 triage_agent_operator_image: quay.io/sovereign-selfheal/triage-agent-operator@sha256:c4181ea70b0211b7f5fd5d55edb688f188ab06cd8bbc40fb066a8df62b301d2f
-triage_agent_operator_replicas: 1
+
+# Log level: the operator reads it from LOG_LEVEL (v0.3.0), and kopf gets --verbose (DEBUG) or
+# --quiet (WARNING). INFO (default), DEBUG or WARNING.
 triage_agent_operator_log_level: INFO
+# kopf liveness endpoint (kopf run --liveness), used by the liveness and readiness probes.
+triage_agent_operator_health_port: 8080
 
 triage_agent_operator_resources:
   requests:
