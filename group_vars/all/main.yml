@@ -63,6 +63,12 @@ keda_enabled: true
 keda_namespace: openshift-keda
 keda_http_addon_enabled: true
 
+# ----- triage-agent-operator (roles/triage_agent_operator, playbooks/20-prereqs.yml) -----
+# Reconciles TriageAgent CRs from gitops components/triage-agent-operator-cr. Image pin lives
+# in roles/triage_agent_operator/defaults/main.yml. Also sent to gitops as
+# triageAgentOperator.enabled (roles/argocd_seed): gitops renders TriageAgent CRs only when true.
+triage_agent_operator_enabled: true
+
 # ----- Team access (roles/team_access, playbooks/15-identity.yml) ---------------------
 # Personal logins for the team: Keycloak users (realm `sso` on RHDP), members of the OpenShift
 # Group below, which is cluster-admin and Argo CD admin. The users are set in the vault only

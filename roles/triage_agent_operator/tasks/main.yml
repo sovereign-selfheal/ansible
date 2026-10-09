@@ -1,0 +1,110 @@
+---
+# Runs only with triage_agent_operator_enabled (gate in playbooks/20-prereqs.yml).
+
+- name: Install the triage-agent-operator
+  ansible.builtin.debug:
+    msg: >-
+      namespace={{ triage_agent_operator_namespace }},
+      image={{ triage_agent_operator_image }},
+      log level={{ triage_agent_operator_log_level }}
+
+- name: Check the log level
+  ansible.builtin.assert:
+    that:
+      - triage_agent_operator_log_level | upper in ['INFO', 'DEBUG', 'WARNING']
+    fail_msg: >-
+      triage_agent_operator_log_level must be INFO, DEBUG or WARNING
+      (got {{ triage_agent_operator_log_level }}).
+    quiet: true
+
+- name: Ensure the operator namespace
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ triage_agent_operator_namespace }}"
+        labels:
+          openshift.io/cluster-monitoring: "true"
+
+- name: Install the TriageAgent CRD
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ lookup('ansible.builtin.file', role_path + '/files/crd.yaml') | ansible.builtin.from_yaml }}"
+
+- name: Ensure the operator ClusterRole
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ lookup('ansible.builtin.template', 'clusterrole.yaml.j2') | ansible.builtin.from_yaml }}"
+
+- name: Ensure the operator ClusterRoleBinding
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ lookup('ansible.builtin.template', 'clusterrolebinding.yaml.j2') | ansible.builtin.from_yaml }}"
+
+# In check mode the namespace above is only dry-run created, so the namespaced objects cannot
+# be dry-run either: they are reported and skipped.
+- name: Read the operator namespace
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Namespace
+    name: "{{ triage_agent_operator_namespace }}"
+  register: triage_agent_operator_ns
+
+- name: Check mode, namespace does not exist yet
+  ansible.builtin.debug:
+    msg: >-
+      Check mode: namespace {{ triage_agent_operator_namespace }} would be created; the
+      ServiceAccount and the Deployment {{ triage_agent_operator_name }} would be created in it
+      (not dry-run).
+  when: ansible_check_mode and triage_agent_operator_ns.resources | length == 0
+
+- name: Ensure the operator ServiceAccount
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: "{{ triage_agent_operator_name }}"
+        namespace: "{{ triage_agent_operator_namespace }}"
+        labels:
+          app: "{{ triage_agent_operator_name }}"
+  when: not (ansible_check_mode and triage_agent_operator_ns.resources | length == 0)
+
+- name: Ensure the operator Deployment
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ lookup('ansible.builtin.template', 'deployment.yaml.j2') | ansible.builtin.from_yaml }}"
+  when: not (ansible_check_mode and triage_agent_operator_ns.resources | length == 0)
+
+# Rolled out: the controller saw the last spec, and the one pod of that spec is up to date and
+# ready (readiness probe on the kopf liveness endpoint). availableReplicas alone also counts the
+# old pod during a rollout.
+- name: Wait until the operator Deployment is rolled out
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    name: "{{ triage_agent_operator_name }}"
+    namespace: "{{ triage_agent_operator_namespace }}"
+  register: triage_agent_operator_deploy
+  until:
+    - triage_agent_operator_deploy.resources | default([]) | length == 1
+    - >-
+      (triage_agent_operator_deploy.resources | first).status.observedGeneration | default(0) | int
+      >= (triage_agent_operator_deploy.resources | first).metadata.generation | int
+    - >-
+      (triage_agent_operator_deploy.resources | first).status.updatedReplicas | default(0) | int
+      == (triage_agent_operator_deploy.resources | first).spec.replicas | int
+    - >-
+      (triage_agent_operator_deploy.resources | first).status.availableReplicas | default(0) | int
+      == (triage_agent_operator_deploy.resources | first).spec.replicas | int
+    - >-
+      (triage_agent_operator_deploy.resources | first).status.replicas | default(0) | int
+      == (triage_agent_operator_deploy.resources | first).spec.replicas | int
+  retries: "{{ triage_agent_operator_wait_retries }}"
+  delay: "{{ triage_agent_operator_wait_delay }}"
+  when:
+    - triage_agent_operator_wait | bool
+    - not ansible_check_mode

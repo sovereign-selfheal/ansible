@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ triage_agent_operator_name }}
+  namespace: {{ triage_agent_operator_namespace }}
+  labels:
+    app: {{ triage_agent_operator_name }}
+spec:
+  # One instance at a time: kopf runs standalone (no peering), so two pods would reconcile the
+  # same CRs at the same time. Recreate also stops the old pod before the new one starts.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: {{ triage_agent_operator_name }}
+  template:
+    metadata:
+      labels:
+        app: {{ triage_agent_operator_name }}
+    spec:
+      serviceAccountName: {{ triage_agent_operator_name }}
+      containers:
+        - name: operator
+          image: {{ triage_agent_operator_image }}
+          imagePullPolicy: IfNotPresent
+          command:
+            - kopf
+            - run
+            - --standalone
+            - --all-namespaces
+            - --liveness=http://0.0.0.0:{{ triage_agent_operator_health_port }}/healthz
+{% if triage_agent_operator_log_level | upper == 'DEBUG' %}
+            - --verbose
+{% elif triage_agent_operator_log_level | upper == 'WARNING' %}
+            - --quiet
+{% endif %}
+            - -m
+            - app.operator
+          env:
+            # Read by the operator since v0.3.0 (posting level and Python logging). The image
+            # sets PYTHONPATH=/app since v0.3.0, so `-m app.operator` works without it here.
+            - name: LOG_LEVEL
+              value: {{ triage_agent_operator_log_level | upper | quote }}
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          ports:
+            - name: health
+              containerPort: {{ triage_agent_operator_health_port }}
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+          resources: {{ triage_agent_operator_resources | to_json }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault

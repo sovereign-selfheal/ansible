@@ -3,6 +3,8 @@
 # - the inference Gateway and its passthrough Route (roles/ingress_gateway);
 # - the secret values for the External Secrets Operator (roles/secrets_bootstrap);
 # - user workload monitoring, for the ServiceMonitors of the gitops repo (roles/user_workload_monitoring);
+# - the triage-agent-operator CRD and controller (roles/triage_agent_operator), before gitops
+#   syncs TriageAgent CRs (components/triage-agent-operator-cr);
 # - the GPU MachineSets, when gpu_enabled and gpu_nodes_managed (roles/gpu_node_prep).
 #   05-early-nodes already created them; here the role waits for the GPU nodes (Running,
 #   Ready, nvidia.com/gpu and its GFD memory label, ClusterPolicy ready). This is the sync
@@ -33,6 +35,14 @@
         apply:
           tags: [user_workload_monitoring]
       when: user_workload_monitoring_enabled | bool
+      tags: always
+
+    - name: Install the triage-agent-operator
+      ansible.builtin.include_role:
+        name: triage_agent_operator
+        apply:
+          tags: [triage_agent_operator]
+      when: triage_agent_operator_enabled | bool
       tags: always
 
     - name: Create the GPU MachineSets

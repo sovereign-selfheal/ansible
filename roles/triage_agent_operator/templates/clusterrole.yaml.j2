@@ -1,0 +1,43 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ triage_agent_operator_name }}
+  labels:
+    app: {{ triage_agent_operator_name }}
+rules:
+  # TriageAgent CR (group as in files/crd.yaml; cluster-wide watch, reconcile in the CR's
+  # namespace). kopf patches the CR for its finalizer and annotations, and patches the status.
+  - apiGroups: [triage.sovereign-selfheal.io]
+    resources: [triageagents]
+    verbs: [get, list, watch, patch]
+  - apiGroups: [triage.sovereign-selfheal.io]
+    resources: [triageagents/status]
+    verbs: [get, update, patch]
+  # Owner references with blockOwnerDeletion (kopf.adopt) need update on the finalizers.
+  - apiGroups: [triage.sovereign-selfheal.io]
+    resources: [triageagents/finalizers]
+    verbs: [update]
+  # Child resources the operator creates per CR (any demo namespace). No Secrets: the API key
+  # comes from ESO through spec.apiKey.existingSecret, and with it set the operator does not
+  # read or write any Secret (gitops components/triage-agent-operator-cr). A CR without
+  # existingSecret fails to reconcile on this platform.
+  - apiGroups: [""]
+    resources: [serviceaccounts, configmaps, services]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [route.openshift.io]
+    resources: [routes]
+    verbs: [get, list, watch, create, update, patch, delete]
+  # Needed to set spec.host on a Route (TriageAgent spec.route.host).
+  - apiGroups: [route.openshift.io]
+    resources: [routes/custom-host]
+    verbs: [create, update, patch]
+  # kopf: events, and the watch of the CRDs (it notices new or changed resources without a restart).
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [create, patch]
+  - apiGroups: [apiextensions.k8s.io]
+    resources: [customresourcedefinitions]
+    verbs: [get, list, watch]
