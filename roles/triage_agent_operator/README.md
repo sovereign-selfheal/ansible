@@ -45,7 +45,7 @@ See `defaults/main.yml`. Main switches:
 | `triage_agent_operator_enabled` | `true` (`group_vars/all/main.yml`) | Set `false` to skip the role; also sent to gitops as `triageAgentOperator.enabled` |
 | `triage_agent_operator_image` | Quay digest pin | Bump after each push to [quay.io/sovereign-selfheal/triage-agent-operator](https://quay.io/repository/sovereign-selfheal/triage-agent-operator) (record tag and date in `defaults/main.yml`) |
 | `triage_agent_operator_namespace` | `triage-agent-operator` | Where the controller runs |
-| `triage_agent_operator_log_level` | `INFO` | `INFO`, `DEBUG` (kopf `--verbose`) or `WARNING` (kopf `--quiet`) |
+| `triage_agent_operator_log_level` | `INFO` | `INFO`, `DEBUG` (kopf `--verbose`) or `WARNING` (kopf `--quiet`); also the `LOG_LEVEL` env that the operator reads |
 | `triage_agent_operator_health_port` | `8080` | Port of the kopf liveness endpoint (`/healthz`) |
 | `triage_agent_operator_wait` / `_wait_retries` / `_wait_delay` | `true` / `30` / `10` | Wait for the rollout (5 minutes) |
 

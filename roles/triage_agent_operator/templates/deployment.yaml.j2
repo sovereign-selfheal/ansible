@@ -38,10 +38,10 @@ spec:
             - -m
             - app.operator
           env:
-            # The `kopf` console script does not put the working directory (/app, the WORKDIR of
-            # the image) on sys.path, so `-m app.operator` fails with "No module named 'app'".
-            - name: PYTHONPATH
-              value: /app
+            # Read by the operator since v0.3.0 (posting level and Python logging). The image
+            # sets PYTHONPATH=/app since v0.3.0, so `-m app.operator` works without it here.
+            - name: LOG_LEVEL
+              value: {{ triage_agent_operator_log_level | upper | quote }}
             - name: PYTHONUNBUFFERED
               value: "1"
           ports:
