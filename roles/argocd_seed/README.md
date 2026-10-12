@@ -28,7 +28,8 @@ in `AGENTS.md` §7.
 5. Creates the root Application with these values: `appsDomain` (from the cluster), `modelProfile`
    (`gpu` when `gpu_enabled`, else `cpu`), `sota.*` (with `sota.enabled` = hybrid mode),
    `secretStore.enabled`, `classifier.mode`, `observability.enabled`, `decisionModel.enabled`,
-   `namespacePolicy.scan`, `namespacePolicy.hint`, `sotaBudget.enabled`, `namespaces.observability`,
+   `namespacePolicy.scan`, `namespacePolicy.hint`, `sotaBudget.enabled`, `triageAgentOperator.enabled`,
+   `namespaces.observability`,
    `namespaces.triageRestricted`, `repo.*`, plus `argocd_seed_extra_values`. With the decision model
    and nodes from `roles/gpu_node_prep` it also sets
    `localModel.profiles.gpu.nodeSelector` to `node-role.kubernetes.io/gpu`, so that Qwen does not
@@ -55,6 +56,7 @@ in `AGENTS.md` §7.
 | `argocd_seed_namespace_policy_scan` | `namespace_policy_scan` (`true`) | Value `namespacePolicy.scan`: the router finds namespace names in the request text |
 | `argocd_seed_namespace_policy_hint` | `namespace_policy_hint` (`false`) | Value `namespacePolicy.hint`: the router reads the names that the agents send |
 | `argocd_seed_sota_budget_enabled` | `sota_budget_enabled` (`true`) | Value `sotaBudget.enabled`: SOTA token budget per tier in the router (v0.12.0), with a Redis of the gitops repo |
+| `argocd_seed_triage_agent_operator_enabled` | `triage_agent_operator_enabled` (`true`) | Value `triageAgentOperator.enabled`: gitops may sync `TriageAgent` CRs (`triage-agent-operator-cr`) |
 | `argocd_seed_restricted_namespace` | `payments` | Namespace of the second quarkus-buggy-app, labelled `restricted`; value `namespaces.triageRestricted` |
 | `argocd_seed_extra_values` | `{}` | Other values of `bootstrap/values.yaml` |
 | `argocd_seed_namespaces` | `local-models`, `maas-routing`, `agentic-triage`, `payments`, `observability` | Namespaces and labels (managed-by, data-class) |

@@ -121,6 +121,10 @@ argocd_seed_namespace_policy_scan: "{{ namespace_policy_scan | default(true) }}"
 argocd_seed_namespace_policy_hint: "{{ namespace_policy_hint | default(false) }}"
 # SOTA budget per tier of the router (gitops sotaBudget.enabled). Always sent, like the switches above.
 argocd_seed_sota_budget_enabled: "{{ sota_budget_enabled | default(true) }}"
+# Triage agent operator (gitops triageAgentOperator.enabled). Always sent, so that turning
+# it off also reaches the root Application. Matches triage_agent_operator_enabled: when
+# false, gitops must not sync TriageAgent CRs (no CRD on the cluster).
+argocd_seed_triage_agent_operator_enabled: "{{ triage_agent_operator_enabled | default(true) }}"
 # Any other value of bootstrap/values.yaml, merged last (for example {tiers: [...]}).
 argocd_seed_extra_values: {}
 
