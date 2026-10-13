@@ -35,8 +35,11 @@ ingress_gateway_timeout: 600
 # Labels added to the Limitador metrics of the Gateway (TelemetryPolicy <gateway>-labels):
 # label name -> CEL expression. `tier` gives the tokens counted per API-key tier
 # (authorized_hits{tier="legal"}). Empty = no TelemetryPolicy.
+# Authorino evaluates these expressions too, before its pipeline has built `auth.tier`: a plain
+# `auth.tier.group` logs 11 CEL errors per request there ("no such key: tier"). The has() guard
+# gives "" instead, and Prometheus drops a label with an empty value.
 ingress_gateway_metric_labels:
-  tier: auth.tier.group
+  tier: 'has(auth.tier) ? auth.tier.group : ""'
 
 # After the GitOps seed (tasks/verify.yml): every gateway pod must have loaded the Kuadrant
 # wasm module. A pod that fails the first fetch answers 503 to every request and never
