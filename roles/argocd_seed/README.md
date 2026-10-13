@@ -35,8 +35,14 @@ in `AGENTS.md` §7.
    and nodes from `roles/gpu_node_prep` it also sets
    `localModel.profiles.gpu.nodeSelector` to `node-role.kubernetes.io/gpu`, so that Qwen does not
    start on the decision node.
-6. Waits until the root Application is `Synced` and `Healthy` (so every component is), then
-   prints the state of every Application.
+6. Asks Argo CD to refresh the root Application and its component Applications (annotation
+   `argocd.argoproj.io/refresh: normal`, so a new commit on the same branch is seen at once). Then
+   waits until the root Application has compared its current spec (branch and values), and every
+   component Application it manages has compared its own spec, is at the same commit as the root
+   one, and is `Synced` and `Healthy`. Synced/Healthy on the root Application alone is not enough:
+   right after a new seed it still shows the result of the previous revision. Then it prints the
+   state of every Application; when the wait times out, the error lists each Application that is
+   not ready and why.
 
 ## Variables (`defaults/main.yml`)
 
@@ -66,7 +72,7 @@ in `AGENTS.md` §7.
 | `argocd_seed_mcpserver_api_group` | `mcp.x-k8s.io` | API group used by the MCPServer Argo CD health check (MCP Lifecycle Operator CRDs) |
 | `argocd_seed_health_checks` | Application, AuthPolicy, TokenRateLimitPolicy, TempoMonolithic, MCPServer, TriageAgent | Lua files in `files/` |
 | `argocd_seed_admin_groups` | `[selfheal-team]` when `team_users` is set, else `[]` | OpenShift Groups made admin in the Argo CD UI: one `g, <group>, role:admin` line each, appended to `spec.rbac.policy` (existing lines are kept) |
-| `argocd_seed_wait` / `_timeout` | `true` / `3600` (gpu), `1800` (cpu) | Wait for Synced and Healthy. The first start of the local model (Qwen3.8) on a new GPU node takes about 27 min |
+| `argocd_seed_wait` / `_timeout` | `true` / `3600` (gpu), `1800` (cpu) | Wait for every Application Synced and Healthy at the new revision (step 6). The first start of the local model (Qwen3.8) on a new GPU node takes about 27 min |
 
 ## Usage
 

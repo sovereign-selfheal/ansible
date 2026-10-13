@@ -39,12 +39,12 @@
             apply:
               tags: [ingress_gateway]
           # Only after a seed that waited for the workloads: the wasm filter comes with them.
-          # A seed that failed before its wait (argocd_seed_root is set by the wait) skips the
+          # A seed that failed before its wait (argocd_seed_apps is set by the wait) skips the
           # check; with --tags ingress_gateway the seed does not run and the check does.
           when:
             - argocd_seed_wait | default(true) | bool
             - not ansible_check_mode
-            - ansible_failed_task is not defined or argocd_seed_root is defined
+            - ansible_failed_task is not defined or argocd_seed_apps is defined
           tags: always
 
         - name: Add the trace links to the console menu
