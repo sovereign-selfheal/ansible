@@ -22,6 +22,9 @@ rules:
   # read or write any Secret (gitops components/triage-agent-operator-cr). A CR without
   # existingSecret fails to reconcile on this platform.
   - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list, watch]
+  - apiGroups: [""]
     resources: [serviceaccounts, configmaps, services]
     verbs: [get, list, watch, create, update, patch, delete]
   - apiGroups: [apps]
