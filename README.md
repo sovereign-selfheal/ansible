@@ -298,12 +298,16 @@ Measured on 2026-09-30 (ocp.5bw8q, spike with a hand-made MachineSet of the same
 
 ## Namespace policy
 
-The seed creates the namespace `payments` for a second quarkus-buggy-app and labels the namespaces of
-the triage demo: `agentic-triage` with `sovereign-selfheal.io/data-class=public`, `payments` with
-`restricted`. It also binds get/list/watch on namespaces to the ServiceAccount `maas-routing/litellm`
+The seed creates one namespace per entry of `argocd_seed_app_namespaces`
+(`roles/argocd_seed`, default: `payments`, `rh-reserve`, `reverse-proxy-app`) — one
+quarkus-buggy-app and one agent each — and labels the namespaces of the triage demo:
+`agentic-triage` (shared services: ticketing, the MCP servers, the Alertmanager bridge) with
+`sovereign-selfheal.io/data-class=public`, and each monitored-application namespace with its own
+`data_class` (default: `payments` restricted, `rh-reserve` and `reverse-proxy-app` public). It
+also binds get/list/watch on namespaces to the ServiceAccount `maas-routing/litellm`
 (ClusterRole `sovereign-selfheal-namespace-reader`), and the same ClusterRole to
 `maas-routing/routing-live-view` (the live page of the routing decisions), which also gets `patch` on
-the two demo namespaces only (ClusterRole `sovereign-selfheal-demo-namespace-labeler`, for its button
+the monitored-application namespaces only (ClusterRole `sovereign-selfheal-demo-namespace-labeler`, for its button
 "Mark as restricted/public"; the page checks the RBAC of the signed-in user first). Since router v0.11.0 a request about a restricted
 namespace stays on the local model. Two switches turn the router policy on:
 `namespace_policy_scan` (on by default) finds namespace names in the request text;

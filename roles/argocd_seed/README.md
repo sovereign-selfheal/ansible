@@ -8,12 +8,14 @@ in `AGENTS.md` §7.
 
 1. Decides the routing mode: **hybrid** when `sota_api_base`, `sota_model` and `sota_api_key` are all set,
    **local-only** when none of them is set. Only some of them set stops the play.
-2. Creates the namespaces `local-models`, `maas-routing`, `agentic-triage`, `payments`
-   (`argocd_seed_restricted_namespace`) and `observability` with the label
-   `argocd.argoproj.io/managed-by: openshift-gitops`. The default instance cannot create namespaces;
-   with this label the GitOps operator gives it admin rights there. `agentic-triage` gets
-   `sovereign-selfheal.io/data-class: public` and `payments` gets `restricted` (namespace policy of the
-   router; a new seed run sets the labels back).
+2. Creates the namespaces `local-models`, `maas-routing`, `agentic-triage`, one per entry of
+   `argocd_seed_app_namespaces` (default: `payments`, `rh-reserve`, `reverse-proxy-app`) and
+   `observability`, with the label `argocd.argoproj.io/managed-by: openshift-gitops`. The default
+   instance cannot create namespaces; with this label the GitOps operator gives it admin rights
+   there. `agentic-triage` (shared services: ticketing, the MCP servers, the Alertmanager bridge)
+   gets `sovereign-selfheal.io/data-class: public`; each monitored-application namespace gets its
+   own `data_class` (default: `payments` restricted, `rh-reserve` and `reverse-proxy-app` public) —
+   namespace policy of the router; a new seed run sets the labels back.
 3. Creates cluster-level RBAC prerequisites for gitops components: the ClusterRoles of
    `argocd_seed_cluster_roles` (`sovereign-selfheal-namespace-reader`,
    `sovereign-selfheal-demo-namespace-labeler`) and the ClusterRoleBindings of
@@ -30,8 +32,9 @@ in `AGENTS.md` §7.
    (`gpu` when `gpu_enabled`, else `cpu`), `sota.*` (with `sota.enabled` = hybrid mode),
    `secretStore.enabled`, `classifier.mode`, `observability.enabled`, `decisionModel.enabled`,
    `namespacePolicy.scan`, `namespacePolicy.hint`, `sotaBudget.enabled`, `triageAgentOperator.enabled`,
-   `namespaces.observability`,
-   `namespaces.triageRestricted`, `repo.*`, plus `argocd_seed_extra_values`. With the decision model
+   `namespaces.observability`, one `namespaces.<key>` per entry of `argocd_seed_app_namespaces`
+   (default: `namespaces.payments`, `namespaces.rhReserve`, `namespaces.reverseProxyApp`), `repo.*`,
+   plus `argocd_seed_extra_values`. With the decision model
    and nodes from `roles/gpu_node_prep` it also sets
    `localModel.profiles.gpu.nodeSelector` to `node-role.kubernetes.io/gpu`, so that Qwen does not
    start on the decision node.
@@ -58,10 +61,11 @@ in `AGENTS.md` §7.
 | `argocd_seed_namespace_policy_hint` | `namespace_policy_hint` (`false`) | Value `namespacePolicy.hint`: the router reads the names that the agents send |
 | `argocd_seed_sota_budget_enabled` | `sota_budget_enabled` (`true`) | Value `sotaBudget.enabled`: SOTA token budget per tier in the router (v0.12.0), with a Redis of the gitops repo |
 | `argocd_seed_triage_agent_operator_enabled` | `triage_agent_operator_enabled` (`true`) | Value `triageAgentOperator.enabled`: the TriageAgent CRD and the operator are installed ([`roles/triage_agent_operator`](../triage_agent_operator/README.md)), so gitops may render `TriageAgent` CRs |
-| `argocd_seed_restricted_namespace` | `payments` | Namespace of the second quarkus-buggy-app, labelled `restricted`; value `namespaces.triageRestricted` |
+| `argocd_seed_app_namespaces` | `payments` (restricted), `rh-reserve` (public), `reverse-proxy-app` (public) | Monitored-application namespaces: one quarkus-buggy-app and one agent each (gitops `components/quarkus-buggy-app` and `components/triage-agent-operator-cr`). Each entry is `{key, name, data_class}`; `key` becomes `namespaces.<key>` of the root Application, `name` is the namespace, `data_class` its `sovereign-selfheal.io/data-class` label |
+| `argocd_seed_app_namespace_values` | computed from `argocd_seed_app_namespaces` | `{key: name}` map merged into the root Application's `namespaces` value |
 | `argocd_seed_extra_values` | `{}` | Other values of `bootstrap/values.yaml` |
-| `argocd_seed_namespaces` | `local-models`, `maas-routing`, `agentic-triage`, `payments`, `observability` | Namespaces and labels (managed-by, data-class) |
-| `argocd_seed_cluster_roles` | `sovereign-selfheal-namespace-reader`, `sovereign-selfheal-demo-namespace-labeler` | ClusterRoles for gitops components (the gitops AppProject allows no cluster-scoped objects) |
+| `argocd_seed_namespaces` | `local-models`, `maas-routing`, `agentic-triage`, the entries of `argocd_seed_app_namespaces`, `observability` | Namespaces and labels (managed-by, data-class) |
+| `argocd_seed_cluster_roles` | `sovereign-selfheal-namespace-reader`, `sovereign-selfheal-demo-namespace-labeler` (patches the namespaces of `argocd_seed_app_namespaces` only) | ClusterRoles for gitops components (the gitops AppProject allows no cluster-scoped objects) |
 | `argocd_seed_cluster_role_bindings` | `prometheus-mcp-server-sa-cluster-monitoring-view`, `ocp-mcp-server-sa-view`, the namespace reader and labeler bindings | ClusterRoleBindings required by gitops components |
 | `argocd_seed_mcpserver_api_group` | `mcp.x-k8s.io` | API group used by the MCPServer Argo CD health check (MCP Lifecycle Operator CRDs) |
 | `argocd_seed_health_checks` | Application, AuthPolicy, TokenRateLimitPolicy, TempoMonolithic, MCPServer, TriageAgent | Lua files in `files/` |

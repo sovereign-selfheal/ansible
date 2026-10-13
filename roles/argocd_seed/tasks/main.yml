@@ -77,8 +77,8 @@
                               'hint': argocd_seed_namespace_policy_hint | bool},
           'sotaBudget': {'enabled': argocd_seed_sota_budget_enabled | bool},
           'triageAgentOperator': {'enabled': argocd_seed_triage_agent_operator_enabled | bool},
-          'namespaces': {'observability': argocd_seed_observability_namespace,
-                         'triageRestricted': argocd_seed_restricted_namespace},
+          'namespaces': ({'observability': argocd_seed_observability_namespace}
+                         | combine(argocd_seed_app_namespace_values)),
           'repo': {'url': argocd_seed_repo_url, 'targetRevision': argocd_seed_revision}}
          | combine({'localModel': {'profiles': {argocd_seed_model_profile: {'nodeSelector': argocd_seed_local_model_node_selector}}}}
                    if argocd_seed_local_model_node_selector | length > 0 else {}, recursive=true)

@@ -251,9 +251,11 @@ The same contract is in `gitops/AGENTS.md` §2. Keep both in sync.
   Authorino (`kuadrant-system`), the `TelemetryPolicy` `openshift-ai-inference-labels` (a Kuadrant policy,
   but it must sit next to the Gateway: label `tier` on the Limitador counters, from the `tier` filter of
   the gitops AuthPolicy),
-  GPU nodes, the namespaces `local-models`, `maas-routing`, `agentic-triage` and `payments`
-  (`argocd_seed_restricted_namespace`) with their `sovereign-selfheal.io/data-class` labels
-  (`agentic-triage` public, `payments` restricted), the Custom Metrics Autoscaler
+  GPU nodes, the namespaces `local-models`, `maas-routing`, `agentic-triage` and one per entry of
+  `argocd_seed_app_namespaces` (`roles/argocd_seed`, default: `payments`, `rh-reserve`,
+  `reverse-proxy-app`) with their `sovereign-selfheal.io/data-class` labels
+  (`agentic-triage` public; each monitored-application namespace its own `data_class`, default
+  `payments` restricted, `rh-reserve` and `reverse-proxy-app` public), the Custom Metrics Autoscaler
   Operator and cluster `KedaController` (including the HTTP add-on when enabled), the External Secrets Operator, the
   `ClusterSecretStore` and its source Secrets (namespace `sovereign-selfheal-secrets`), the model image
   pre-pull DaemonSets (namespace `sovereign-selfheal-prepull`), the Argo CD settings, the root Application,
@@ -278,8 +280,11 @@ The same contract is in `gitops/AGENTS.md` §2. Keep both in sync.
   `AlertmanagerConfig` of `gitops/components/ogx-alert-translator`), team access when `team_users` is set (Keycloak
   in the namespace `keycloak` when this repo installs it: PostgreSQL, `Keycloak` CR, Route; realm, client,
   users; the OAuth IdP; `Group/selfheal-team` and its ClusterRoleBinding; the Argo CD RBAC line of that Group).
-  `gitops`: every object inside `local-models`, `maas-routing`, `agentic-triage`, `payments` and `observability`.
-- **Namespaces** `local-models`, `maas-routing`, `agentic-triage`, `payments` and `observability` carry `argocd.argoproj.io/managed-by: openshift-gitops`
+  `gitops`: every object inside `local-models`, `maas-routing`, `agentic-triage`, the namespaces of
+  `argocd_seed_app_namespaces` and `observability`.
+- **Namespaces** `local-models`, `maas-routing`, `agentic-triage`, the namespaces of
+  `argocd_seed_app_namespaces` (default: `payments`, `rh-reserve`, `reverse-proxy-app`) and
+  `observability` carry `argocd.argoproj.io/managed-by: openshift-gitops`
   (the default Argo CD instance manages only labelled namespaces), and `local-models` also
   `opendatahub.io/dashboard: "true"` and `modelmesh-enabled: "false"`.
 - **Root Application** (`30-gitops-seed.yml`): path `bootstrap` of the gitops repo, with `helm.valuesObject`:
@@ -290,7 +295,8 @@ The same contract is in `gitops/AGENTS.md` §2. Keep both in sync.
   `observability.enabled` (`observability_enabled`, default `true`), `namespaces.observability`,
   `decisionModel.enabled` (`decision_model_enabled`, default `gpu_enabled`), `namespacePolicy.scan`
   (`namespace_policy_scan`, default `true`), `namespacePolicy.hint` (`namespace_policy_hint`, default
-  `false`), `namespaces.triageRestricted` (`argocd_seed_restricted_namespace`, default `payments`),
+  `false`), one `namespaces.<key>` per entry of `argocd_seed_app_namespaces` (default:
+  `namespaces.payments`, `namespaces.rhReserve`, `namespaces.reverseProxyApp`),
   `sotaBudget.enabled` (`sota_budget_enabled`, default `true`; router v0.12.0, the SOTA budget per tier
   with a Redis of `gitops`), `triageAgentOperator.enabled` (`triage_agent_operator_enabled`, default
   `true`: the TriageAgent CRD and the operator are installed, so `gitops` may render `TriageAgent` CRs), and,
@@ -298,9 +304,11 @@ The same contract is in `gitops/AGENTS.md` §2. Keep both in sync.
   (`node-role.kubernetes.io/gpu: ""`).
 - **Namespace policy** (router v0.11.0): this repo owns the data-class labels and the RBAC that lets the
   router (ServiceAccount `litellm`) and the live page (`routing-live-view`) read them; `gitops` turns the
-  router policy on with `namespacePolicy.scan/hint` and deploys the second quarkus-buggy-app in
-  `namespaces.triageRestricted`. Keep the namespace name, the ServiceAccount names and the label key equal
-  in both repos.
+  router policy on with `namespacePolicy.scan/hint` and deploys one `quarkus-buggy-app` instance and one
+  agent in each of `namespaces.payments`, `namespaces.rhReserve`, `namespaces.reverseProxyApp`
+  (`argocd_seed_app_namespaces` of `roles/argocd_seed`). Keep the namespace names, the ServiceAccount
+  names and the label key equal in both repos; a namespace added or renamed here needs the matching
+  bootstrap component (`quarkus-buggy-app-<ns>`, `triage-agent-<ns>`) in `gitops`.
 - **Decision model** (`decision_model_enabled`): this repo creates the `gpu-decision` GPU pool
   (`roles/gpu_node_prep`, node label `node-role.kubernetes.io/gpu-decision`) and the pre-pull of its images
   (`model_prepull_decision_images`, same digests as `decisionModel` in `gitops/bootstrap/values.yaml`).
