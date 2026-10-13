@@ -10,8 +10,9 @@ triage_agent_operator_namespace: triage-agent-operator
 triage_agent_operator_name: triage-agent-operator
 
 # Pin by digest (same convention as roles/model_prepull and gitops image pins).
-# tag aa47001 on quay.io/sovereign-selfheal/triage-agent-operator, resolved on quay.io on 2026-10-13.
-# Rollout-aware TriageAgent phase (Pending during startup; Degraded on progress deadline or pod backoff).
+# tag aa47001 (v0.4.0) on quay.io/sovereign-selfheal/triage-agent-operator, resolved on 2026-10-13.
+# The TriageAgent phase follows the rollout: Pending while the pods start, Degraded only on the
+# progress deadline of the Deployment or a pod in CrashLoopBackOff / ImagePullBackOff (ansible#23).
 triage_agent_operator_image: quay.io/sovereign-selfheal/triage-agent-operator@sha256:cd93690dc3494122982c4703d98663cab87a5bc7d1689e3056821839a32055aa
 
 # Log level: the operator reads it from LOG_LEVEL (v0.3.0), and kopf gets --verbose (DEBUG) or
