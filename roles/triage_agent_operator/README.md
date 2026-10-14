@@ -17,7 +17,7 @@ when the CRD and the operator are installed.
 |---|---|
 | Namespace `triage-agent-operator` | Not managed by Argo CD |
 | `CustomResourceDefinition` `triageagents.triage.sovereign-selfheal.io` | Copy of `triage-agent-operator/deploy/crd.yaml` in `files/crd.yaml` |
-| `ClusterRole` / `ClusterRoleBinding` `triage-agent-operator` | Reconcile `TriageAgent` CRs and their child objects in any namespace. No rights on Secrets (see below) |
+| `ClusterRole` / `ClusterRoleBinding` `triage-agent-operator` | Reconcile `TriageAgent` CRs and their child objects in any namespace, and read the pods of the agents for the status phase. No rights on Secrets (see below) |
 | `ServiceAccount` + `Deployment` `triage-agent-operator` | Image `quay.io/sovereign-selfheal/triage-agent-operator` (pinned in `defaults/main.yml`) |
 
 Argo CD health for `TriageAgent` is configured by `roles/argocd_seed` (`health-triageagent.lua`).

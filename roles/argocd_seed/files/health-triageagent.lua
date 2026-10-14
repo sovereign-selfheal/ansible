@@ -2,8 +2,9 @@
 -- The operator always writes status.phase (Pending, Running or Degraded, see the CRD) together
 -- with an Available condition that is False for every phase except Running. So the phase
 -- decides, and the conditions are read only when there is no phase.
--- Note: the operator computes the status only on create/update/resume today; the refresh
--- (timer or watch on the child Deployment) is being fixed in the triage-agent-operator repo.
+-- The operator refreshes the status on every change of the CR and with a 60 s timer, so the
+-- phase can be up to one minute behind the Deployment. Since v0.4.0 a normal rollout (for
+-- example a long image pull) is Pending, not Degraded.
 hs = {}
 if obj.status ~= nil and obj.status.phase ~= nil then
   if obj.status.phase == "Running" then
@@ -20,7 +21,7 @@ if obj.status ~= nil and obj.status.phase ~= nil then
     hs.message = "TriageAgent deployment is degraded"
     return hs
   end
-  -- Pending (the Deployment is not observed yet) or a phase this check does not know.
+  -- Pending (no Deployment yet, or its rollout is in progress) or a phase this check does not know.
   hs.status = "Progressing"
   hs.message = "TriageAgent is " .. obj.status.phase
   return hs
