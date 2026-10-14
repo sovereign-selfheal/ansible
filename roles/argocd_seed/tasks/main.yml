@@ -189,51 +189,103 @@
   kubernetes.core.k8s:
     state: present
     definition: "{{ lookup('ansible.builtin.template', 'root-application.yaml.j2') | ansible.builtin.from_yaml }}"
+  register: argocd_seed_root_applied
 
+# Synced/Healthy on the root Application alone is not enough: right after a new seed it still
+# shows the result of the previous revision (on 2026-10-13 the wait passed in 29 s, and Argo CD
+# needed 7 more minutes to sync the new branch). So the wait also checks that Argo CD compared
+# the current spec (branch and values) of every Application, and that every component
+# Application managed by the root one is at the same commit as the root one.
 - name: Wait for the workloads
   when:
     - argocd_seed_wait | bool
     - not ansible_check_mode
+  vars:
+    # Evaluated again at every retry of the wait (argocd_seed_apps is its result).
+    # One "<name>: <reason>" line per Application that is not ready yet.
+    argocd_seed_not_ready: >-
+      {%- macro why(app, root_revision) -%}
+      {%- set st = app.status | default({}) -%}
+      {%- set sync = st.sync | default({}) -%}
+      {%- set compared = sync.comparedTo | default({}) -%}
+      {%- set spec = app.spec | default({}) -%}
+      {%- set health = (st.health | default({})).status | default('unknown') -%}
+      {%- if not app -%}not created yet
+      {%- elif 'argocd.argoproj.io/refresh' in (app.metadata.annotations | default({})) -%}refresh requested
+      {%- elif [compared.source | default(none), compared.sources | default(none)]
+               != [spec.source | default(none), spec.sources | default(none)] -%}new spec not compared yet
+      {%- elif root_revision and sync.revision | default('') != root_revision -%}
+      revision {{ (sync.revision | default('none'))[:7] }}, root {{ root_revision[:7] }}
+      {%- elif sync.status | default('') != 'Synced' -%}sync {{ sync.status | default('unknown') }}
+      {%- elif health != 'Healthy' -%}health {{ health }}
+      {%- endif -%}
+      {%- endmacro -%}
+      {%- set apps = argocd_seed_apps.resources | default([]) -%}
+      {%- set root = apps | selectattr('metadata.name', 'eq', argocd_seed_app_name) | first | default({}) -%}
+      {%- set root_status = root.status | default({}) -%}
+      {%- set root_revision = (root_status.sync | default({})).revision | default('') -%}
+      {%- set acc = namespace(list=[]) -%}
+      {%- set reason = why(root, '') -%}
+      {%- if reason -%}{%- set acc.list = acc.list + [argocd_seed_app_name ~ ': ' ~ reason] -%}{%- endif -%}
+      {%- for res in root_status.resources | default([]) if res.kind == 'Application' -%}
+      {%- set reason = why(apps | selectattr('metadata.name', 'eq', res.name) | first | default({}), root_revision) -%}
+      {%- if reason -%}{%- set acc.list = acc.list + [res.name ~ ': ' ~ reason] -%}{%- endif -%}
+      {%- endfor -%}
+      {{ acc.list }}
   block:
-    - name: Wait until the root Application is Synced and Healthy
-      kubernetes.core.k8s_info:
+    # A new commit on the same branch changes no spec, so Argo CD would only see it at its next
+    # reconciliation (every 3 minutes). The refresh annotation asks for it now: `normal` resolves
+    # the branch again (`hard` would also regenerate the manifests, which is not needed). Argo CD
+    # removes the annotation when the refresh is done. It is a request, not a change: changed_when
+    # is false. On a new cluster the root Application has no status yet, so only the root is asked.
+    - name: Ask Argo CD to refresh the root Application and its component Applications
+      kubernetes.core.k8s:
+        state: patched
         api_version: argoproj.io/v1alpha1
         kind: Application
-        name: "{{ argocd_seed_app_name }}"
+        name: "{{ argocd_seed_refresh_app }}"
         namespace: "{{ argocd_seed_namespace }}"
-      register: argocd_seed_root
-      until:
-        - argocd_seed_root.resources | length == 1
-        - (argocd_seed_root.resources | first).status.sync.status | default('') == 'Synced'
-        - (argocd_seed_root.resources | first).status.health.status | default('') == 'Healthy'
-      retries: "{{ ((argocd_seed_timeout | int) / (argocd_seed_poll_delay | int)) | round(0, 'ceil') | int }}"
-      delay: "{{ argocd_seed_poll_delay }}"
-      failed_when: false
+        merge_type: merge
+        definition:
+          metadata:
+            annotations:
+              argocd.argoproj.io/refresh: normal
+      loop: >-
+        {{ [argocd_seed_app_name]
+           + ((argocd_seed_root_applied.result | default({})).status | default({})).resources | default([])
+             | selectattr('kind', 'eq', 'Application') | map(attribute='name') | list }}
+      loop_control:
+        loop_var: argocd_seed_refresh_app
+      changed_when: false
 
-    - name: Read the component Applications
+    - name: Wait until every Application is Synced and Healthy at the new revision
       kubernetes.core.k8s_info:
         api_version: argoproj.io/v1alpha1
         kind: Application
         namespace: "{{ argocd_seed_namespace }}"
       register: argocd_seed_apps
+      until: argocd_seed_not_ready | length == 0
+      retries: "{{ ((argocd_seed_timeout | int) / (argocd_seed_poll_delay | int)) | round(0, 'ceil') | int }}"
+      delay: "{{ argocd_seed_poll_delay }}"
+      failed_when: false
 
     - name: Show the state of every Application
       ansible.builtin.debug:
         msg: >-
           {{ argocd_seed_app.metadata.name }}: sync={{ argocd_seed_app.status.sync.status | default('n/a') }}
           health={{ argocd_seed_app.status.health.status | default('n/a') }}
+          revision={{ (argocd_seed_app.status.sync.revision | default('n/a'))[:7] }}
           {{ argocd_seed_app.status.conditions | default([]) | map(attribute='message') | join('; ') }}
       loop: "{{ argocd_seed_apps.resources | sort(attribute='metadata.name') }}"
       loop_control:
         loop_var: argocd_seed_app
         label: "{{ argocd_seed_app.metadata.name }}"
 
-    - name: Assert the root Application is Synced and Healthy
+    - name: Assert every Application is Synced and Healthy at the new revision
       ansible.builtin.assert:
         that:
-          - (argocd_seed_root.resources | first).status.sync.status | default('') == 'Synced'
-          - (argocd_seed_root.resources | first).status.health.status | default('') == 'Healthy'
+          - argocd_seed_not_ready | length == 0
         fail_msg: >-
-          {{ argocd_seed_app_name }} is not Synced/Healthy after {{ argocd_seed_timeout }}s (see the task above).
+          Not ready after {{ argocd_seed_timeout }}s: {{ argocd_seed_not_ready | join('; ') }}.
           Check the Applications in the Argo CD console.
-        success_msg: "{{ argocd_seed_app_name }} is Synced and Healthy"
+        success_msg: "{{ argocd_seed_app_name }} and its component Applications are Synced and Healthy at the new revision"
