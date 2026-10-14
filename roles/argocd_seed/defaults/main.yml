@@ -11,37 +11,56 @@ argocd_seed_repo_url: https://github.com/sovereign-selfheal/gitops.git
 argocd_seed_revision: main
 argocd_seed_path: bootstrap
 
-# Namespace of the second quarkus-buggy-app (gitops namespaces.triageRestricted).
-argocd_seed_restricted_namespace: payments
+# Monitored-application namespaces: one quarkus-buggy-app and one agent each (gitops
+# components/quarkus-buggy-app and components/triage-agent-operator-cr, one instance per entry).
+# `key` matches a key of gitops `namespaces` (bootstrap/values.yaml: `namespaces.payments`,
+# `namespaces.rhReserve`, `namespaces.reverseProxyApp`) and is passed to the root Application
+# (see argocd_seed_app_namespace_values below). `data_class` sets the namespace's
+# sovereign-selfheal.io/data-class label (namespace policy, router v0.11.0): `restricted` keeps
+# every investigation of that namespace on the local model; `public` (or no label) keeps the
+# normal routing. A new seed run sets the labels back (a live `oc label` lasts until then).
+argocd_seed_app_namespaces:
+  - key: payments
+    name: payments
+    data_class: restricted
+  - key: rhReserve
+    name: rh-reserve
+    data_class: public
+  - key: reverseProxyApp
+    name: reverse-proxy-app
+    data_class: public
+
+# {key: name} of argocd_seed_app_namespaces, merged into the root Application's `namespaces`
+# value (see the task below) so gitops gets namespaces.payments / namespaces.rhReserve /
+# namespaces.reverseProxyApp.
+argocd_seed_app_namespace_values: >-
+  {%- set acc = namespace(map={}) -%}
+  {%- for ns in argocd_seed_app_namespaces -%}
+  {%- set acc.map = acc.map | combine({ns.key: ns.name}) -%}
+  {%- endfor -%}
+  {{ acc.map }}
 
 # Workload namespaces, created here because the default Argo CD instance cannot create
 # namespaces. The managed-by label gives that instance admin rights in them.
 # sovereign-selfheal.io/data-class is the label of the namespace policy (router v0.11.0): a request
 # about a `restricted` namespace stays on the local model; no label or `public` keeps the normal
 # routing. A new seed run sets these labels back (a live `oc label` lasts until then).
-argocd_seed_namespaces:
-  - name: local-models
-    labels:
-      argocd.argoproj.io/managed-by: "{{ argocd_seed_namespace }}"
-      opendatahub.io/dashboard: "true"
-      modelmesh-enabled: "false"
-  - name: maas-routing
-    labels:
-      argocd.argoproj.io/managed-by: "{{ argocd_seed_namespace }}"
-  - name: agentic-triage
-    labels:
-      argocd.argoproj.io/managed-by: "{{ argocd_seed_namespace }}"
-      sovereign-selfheal.io/data-class: public
-  # Second quarkus-buggy-app of the triage demo: the agent investigates it with the local model only.
-  - name: "{{ argocd_seed_restricted_namespace }}"
-    labels:
-      argocd.argoproj.io/managed-by: "{{ argocd_seed_namespace }}"
-      sovereign-selfheal.io/data-class: restricted
-  # Tempo and the OpenTelemetry collector (gitops component observability). Created also when
-  # observability_enabled is false: an empty namespace costs nothing and keeps the contract simple.
-  - name: "{{ argocd_seed_observability_namespace }}"
-    labels:
-      argocd.argoproj.io/managed-by: "{{ argocd_seed_namespace }}"
+argocd_seed_namespaces: >-
+  {%- set acc = namespace(list=[
+    {'name': 'local-models', 'labels': {'argocd.argoproj.io/managed-by': argocd_seed_namespace,
+                                         'opendatahub.io/dashboard': 'true', 'modelmesh-enabled': 'false'}},
+    {'name': 'maas-routing', 'labels': {'argocd.argoproj.io/managed-by': argocd_seed_namespace}},
+    {'name': 'agentic-triage', 'labels': {'argocd.argoproj.io/managed-by': argocd_seed_namespace,
+                                           'sovereign-selfheal.io/data-class': 'public'}}
+  ]) -%}
+  {%- for ns in argocd_seed_app_namespaces -%}
+  {%- set acc.list = acc.list + [{'name': ns.name,
+      'labels': {'argocd.argoproj.io/managed-by': argocd_seed_namespace,
+                 'sovereign-selfheal.io/data-class': ns.data_class}}] -%}
+  {%- endfor -%}
+  {%- set acc.list = acc.list + [{'name': argocd_seed_observability_namespace,
+      'labels': {'argocd.argoproj.io/managed-by': argocd_seed_namespace}}] -%}
+  {{ acc.list }}
 
 # Cluster roles for gitops components (the AppProject of the gitops repo allows no
 # cluster-scoped objects).
@@ -52,13 +71,15 @@ argocd_seed_cluster_roles:
       - apiGroups: [""]
         resources: [namespaces]
         verbs: [get, list, watch]
-  # Live page of the routing decisions: its button changes the data-class label of the demo
-  # namespaces only, after a SelfSubjectAccessReview with the token of the signed-in user.
+  # Live page of the routing decisions: its button changes the data-class label of the
+  # monitored-application namespaces only (the ones it shows as cards, gitops
+  # routing-live-view demoNamespaceRefs), after a SelfSubjectAccessReview with the token of
+  # the signed-in user.
   - name: sovereign-selfheal-demo-namespace-labeler
     rules:
       - apiGroups: [""]
         resources: [namespaces]
-        resourceNames: [agentic-triage, "{{ argocd_seed_restricted_namespace }}"]
+        resourceNames: "{{ argocd_seed_app_namespaces | map(attribute='name') | list }}"
         verbs: [get, patch]
 
 # Cluster-level RBAC prerequisites for gitops components.
