@@ -3,9 +3,10 @@
 # keep it on your machine, encrypted with ansible-vault.
 #
 #   cp group_vars/all/vault.yml.example group_vars/all/vault.yml
-#   ansible-vault encrypt group_vars/all/vault.yml     # choose a vault password
-#   ansible-vault edit group_vars/all/vault.yml        # set the values
-#   ansible-playbook playbooks/site.yml --ask-vault-pass
+#   uv run ansible-vault encrypt group_vars/all/vault.yml     # choose a vault password
+#   uv run ansible-vault edit group_vars/all/vault.yml        # set the values
+#   scripts/run-playbook.sh playbooks/site.yml                # asks for the password, or reads
+#                                                             # the password file (see README)
 #
 # On RHDP, AgnosticV passes the same variables as extra vars: no vault file is needed.
 

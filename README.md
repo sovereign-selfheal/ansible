@@ -95,8 +95,8 @@ Create the vault once:
 
 ```bash
 cp group_vars/all/vault.yml.example group_vars/all/vault.yml
-ansible-vault encrypt group_vars/all/vault.yml
-ansible-vault edit group_vars/all/vault.yml
+uv run ansible-vault encrypt group_vars/all/vault.yml
+uv run ansible-vault edit group_vars/all/vault.yml
 ```
 
 Then run the playbooks with `scripts/run-playbook.sh` (from the repo root). It adds the vault password
@@ -122,7 +122,7 @@ RHDP gives one login, `admin`. To give each team member a personal login with cl
 purpose: they stay in `group_vars/all/vault.yml` (or come from AgnosticV as extra vars).
 
 ```bash
-ansible-vault edit group_vars/all/vault.yml
+uv run ansible-vault edit group_vars/all/vault.yml
 ```
 
 ```yaml
@@ -393,9 +393,11 @@ shellcheck scripts/*.sh
 - `inventory/group_vars` is a symlink to the repo-root `group_vars/`, so the variables are loaded
   for `inventory/localhost.yml` while keeping the layout described in AGENTS.md.
 - RHDP clusters already have OpenShift GitOps, cert-manager and the Red Hat build of Keycloak installed,
-  with Automatic approval. The role keeps their OperatorGroups and updates their Subscriptions to the
-  numbered channel, Manual approval and the pinned CSV. The operators are not reinstalled. Keycloak is
-  managed only when `team_users` is set.
+  with Automatic approval. The role keeps their OperatorGroups and does not reinstall them. When the
+  installed version is newer than the pin (`allow_newer_installed`), the role keeps it and sets only
+  Manual approval: the channel and the CSV stay as they are (see `roles/olm_operator/README.md`).
+  Otherwise it updates the Subscription to the numbered channel, Manual approval and the pinned CSV.
+  Keycloak is managed only when `team_users` is set.
 
 ## License
 
