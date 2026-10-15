@@ -28,6 +28,10 @@ in `AGENTS.md` §7.
    `TriageAgent` (Healthy when `status.phase` is `Running`, Progressing while `Pending`).
    Argo CD 3.4 already knows
    `OpenTelemetryCollector`. This replaces `spec.resourceHealthChecks` of the instance.
+   It also sets the resources of the application controller (`argocd_seed_controller_resources`,
+   limit 4Gi instead of the operator default 2Gi), waits until the controller pod runs with them,
+   and deletes the pod first when it crashes with the old limit (a StatefulSet does not replace a
+   pod that is not Ready).
 5. Creates the root Application with these values: `appsDomain` (from the cluster), `modelProfile`
    (`gpu` when `gpu_enabled`, else `cpu`), `sota.*` (with `sota.enabled` = hybrid mode),
    `secretStore.enabled`, `classifier.mode`, `observability.enabled`, `decisionModel.enabled`,
@@ -75,6 +79,7 @@ in `AGENTS.md` §7.
 | `argocd_seed_cluster_role_bindings` | `prometheus-mcp-server-sa-cluster-monitoring-view`, `ocp-mcp-server-sa-view`, the namespace reader and labeler bindings | ClusterRoleBindings required by gitops components |
 | `argocd_seed_mcpserver_api_group` | `mcp.x-k8s.io` | API group used by the MCPServer Argo CD health check (MCP Lifecycle Operator CRDs) |
 | `argocd_seed_health_checks` | Application, AuthPolicy, TokenRateLimitPolicy, TempoMonolithic, MCPServer, TriageAgent | Lua files in `files/` |
+| `argocd_seed_controller_resources` | requests 250m / 1Gi, limits 2 / 4Gi | `spec.controller.resources` of the ArgoCD CR. Each client-side apply needs about 300-430 MiB for a few seconds, on top of about 1-1.3 GiB; with the operator default (limit 2Gi) three applies at once OOMKilled the controller. `{}` keeps the operator default |
 | `argocd_seed_admin_groups` | `[selfheal-team]` when `team_users` is set, else `[]` | OpenShift Groups made admin in the Argo CD UI: one `g, <group>, role:admin` line each, appended to `spec.rbac.policy` (existing lines are kept) |
 | `argocd_seed_wait` / `_timeout` | `true` / `3600` (gpu), `1800` (cpu) | Wait for every Application Synced and Healthy at the new revision (step 6). The first start of the local model (Qwen3.8) on a new GPU node takes about 27 min |
 

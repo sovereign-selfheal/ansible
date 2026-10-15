@@ -177,6 +177,20 @@ argocd_seed_health_checks:
     kind: TriageAgent
     file: health-triageagent.lua
 
+# Resources of the Argo CD application controller (ArgoCD CR spec.controller.resources). The
+# operator default (request 1Gi, limit 2Gi) is too small for this demo: the controller keeps about
+# 1-1.3 GiB, and each client-side apply needs about 300-430 MiB more for a few seconds (measured on
+# OCP 4.22.17 with OpenShift GitOps 1.22 on 2026-10-15). Three applies at once (the TriageAgent CRs
+# of a knowledge.md change) reached 2.5 GiB, and the controller was OOMKilled in a loop. {} keeps
+# the operator default.
+argocd_seed_controller_resources:
+  requests:
+    cpu: 250m
+    memory: 1Gi
+  limits:
+    cpu: "2"
+    memory: 4Gi
+
 # OpenShift Groups that are admin in the Argo CD UI (Dex passes the OpenShift groups to Argo CD).
 # One line `g, <group>, role:admin` per group is added to spec.rbac.policy; the lines already
 # there (e.g. the RHDP `g, admin, role:admin`) are kept. Default: the team Group of

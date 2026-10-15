@@ -151,6 +151,74 @@
           {%- endfor -%}
           {{ acc.list }}
 
+# Before the root Application: the controller restarts with the new resources before the syncs.
+- name: Ensure the resources of the Argo CD application controller
+  kubernetes.core.k8s:
+    state: patched
+    api_version: argoproj.io/v1beta1
+    kind: ArgoCD
+    name: "{{ argocd_seed_argocd_name }}"
+    namespace: "{{ argocd_seed_namespace }}"
+    merge_type: merge
+    definition:
+      spec:
+        controller:
+          resources: "{{ argocd_seed_controller_resources }}"
+  when: argocd_seed_controller_resources | length > 0
+
+- name: Roll out the application controller with these resources
+  when:
+    - argocd_seed_controller_resources | length > 0
+    - not ansible_check_mode
+  vars:
+    argocd_seed_controller_pod_name: "{{ argocd_seed_argocd_name }}-application-controller-0"
+    argocd_seed_controller_limit: "{{ (argocd_seed_controller_resources.limits | default({})).memory | default('') }}"
+  block:
+    - name: Read the application controller pod
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Pod
+        name: "{{ argocd_seed_controller_pod_name }}"
+        namespace: "{{ argocd_seed_namespace }}"
+      register: argocd_seed_controller_pod
+
+    # A StatefulSet does not replace a pod that is not Ready: a controller that is OOMKilled in a
+    # loop keeps the old limit forever (seen on 2026-10-15). Such a pod (old limit, restarted, not
+    # Ready, not already terminating) is deleted, so that the StatefulSet creates it again from the
+    # new template. A healthy pod is left to the rolling update of the StatefulSet.
+    - name: Replace a controller pod that crashes with the old memory limit
+      kubernetes.core.k8s:
+        state: absent
+        api_version: v1
+        kind: Pod
+        name: "{{ argocd_seed_controller_pod_name }}"
+        namespace: "{{ argocd_seed_namespace }}"
+      vars:
+        argocd_seed_pod: "{{ argocd_seed_controller_pod.resources | first }}"
+      when:
+        - argocd_seed_controller_pod.resources | length > 0
+        - argocd_seed_pod.metadata.deletionTimestamp is not defined
+        - ((argocd_seed_pod.spec.containers | first).resources.limits | default({})).memory | default('')
+          != argocd_seed_controller_limit
+        - not (argocd_seed_pod.status.containerStatuses | default([{}]) | first).ready | default(false)
+        - (argocd_seed_pod.status.containerStatuses | default([{}]) | first).restartCount | default(0) | int > 0
+
+    - name: Wait until the application controller runs with the new memory limit
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Pod
+        name: "{{ argocd_seed_controller_pod_name }}"
+        namespace: "{{ argocd_seed_namespace }}"
+      register: argocd_seed_controller_pod_new
+      until:
+        - argocd_seed_controller_pod_new.resources | default([]) | length > 0
+        - (((argocd_seed_controller_pod_new.resources | first).spec.containers | first).resources.limits | default({})).memory
+          | default('') == argocd_seed_controller_limit
+        - ((argocd_seed_controller_pod_new.resources | first).status.containerStatuses | default([{}]) | first).ready | default(false)
+      retries: 30
+      delay: 10
+      when: argocd_seed_controller_limit | length > 0
+
 - name: Read the Argo CD instance
   kubernetes.core.k8s_info:
     api_version: argoproj.io/v1beta1
