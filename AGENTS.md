@@ -304,11 +304,13 @@ The same contract is in `gitops/AGENTS.md` §2. Keep both in sync.
   (`node-role.kubernetes.io/gpu: ""`).
 - **Namespace policy** (router v0.11.0): this repo owns the data-class labels and the RBAC that lets the
   router (ServiceAccount `litellm`) and the live page (`routing-live-view`) read them; `gitops` turns the
-  router policy on with `namespacePolicy.scan/hint` and deploys one `quarkus-buggy-app` instance and one
-  agent in each of `namespaces.payments`, `namespaces.rhReserve`, `namespaces.reverseProxyApp`
+  router policy on with `namespacePolicy.scan/hint` and deploys one buggy app (chart `quarkus-buggy-app`)
+  and one agent in each of `namespaces.payments`, `namespaces.rhReserve`, `namespaces.reverseProxyApp`
   (`argocd_seed_app_namespaces` of `roles/argocd_seed`). Keep the namespace names, the ServiceAccount
   names and the label key equal in both repos; a namespace added or renamed here needs the matching
-  bootstrap component (`quarkus-buggy-app-<ns>`, `triage-agent-<ns>`) in `gitops`.
+  entries in `gitops`: the bootstrap components of its buggy app (for example `payments-buggy-app`, with
+  `values.appName`) and of its agent (`triage-agent-<ns>`, with its runbook `knowledge*.md`), and its
+  alert service (`alerts.quarkusBuggyApp.services` of the observability component).
 - **Decision model** (`decision_model_enabled`): this repo creates the `gpu-decision` GPU pool
   (`roles/gpu_node_prep`, node label `node-role.kubernetes.io/gpu-decision`) and the pre-pull of its images
   (`model_prepull_decision_images`, same digests as `decisionModel` in `gitops/bootstrap/values.yaml`).
